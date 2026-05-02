@@ -19,9 +19,3 @@ class GenerateRequest {
         this.prompt = prompt;
     }
 }
-
-class GenerateResponse {
-    @SerializedName("image_url")
-    private String imageUrl;
-    public String getImageUrl() { return imageUrl; }
-}
