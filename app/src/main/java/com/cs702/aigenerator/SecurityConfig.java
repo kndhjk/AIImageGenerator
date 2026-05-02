@@ -8,8 +8,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.util.ArrayList;
 import java.util.List;
-import javax.net.ssl.CertificatePinner;
-import okhttp3.CertificatePinner.Builder;
+import okhttp3.CertificatePinner;
 import okhttp3.OkHttpClient;
 
 /**
