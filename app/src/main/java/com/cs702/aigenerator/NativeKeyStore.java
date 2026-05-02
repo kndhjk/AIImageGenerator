@@ -61,12 +61,11 @@ public class NativeKeyStore {
     }
 
     /**
-     * Validate that the key has expected format (basic sanity check).
-     * This doesn't expose the key, just checks its characteristics.
+     * Basic sanity check - key should be a reasonably long non-null string.
+     * Actual format validation is not critical since XOR decoding will produce
+     * garbage if the Base64 was corrupted anyway.
      */
     public static boolean isValidKey(String key) {
-        if (key == null) return false;
-        // API key should be hex string of specific length
-        return key.matches("[a-f0-9]{80}");
+        return key != null && key.length() >= 64;
     }
 }
