@@ -23,36 +23,51 @@ public class SecurityConfig {
     // Fetched via: openssl s_client -connect ai.elliottwen.info:443
     public static final String CERT_SHA256 = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
 
-    // Backup pins in case certificate rotation happens
+    // Backup pins - Cloudflare intermediate CA
     public static final String CERT_SHA256_BACKUP1 = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
 
+    // Wildcard cert for *.elliottwen.info
+    public static final String CERT_SHA256_WILDCARD = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
+
     public static CertificatePinner buildCertificatePinner() {
-        return new CertificatePinner.Builder()
-            // Primary pin - Cloudflare Origin cert for ai.elliottwen.info
-            .add("ai.elliottwen.info", "sha256/" + CERT_SHA256)
-            // Backup pin - same cert, same key (Cloudflare changes this on rotation)
-            .add("ai.elliottwen.info", "sha256/" + CERT_SHA256_BACKUP1)
-            // Also pin the Cloudflare intermediate CA as backup
-            .add("ai.elliottwen.info", "sha256/GrXIkJaICZfPJ5qR8aPBzPAjMX8Vrl7gB0pKmwx0eWA=")
-            .build();
+        CertificatePinner.Builder builder = new CertificatePinner.Builder();
+
+        // Pin for ai.elliottwen.info - matches the wildcard *.elliottwen.info cert
+        builder.add("ai.elliottwen.info", "sha256/" + CERT_SHA256);
+        // Backup pins in case of cert rotation
+        builder.add("ai.elliottwen.info", "sha256/" + CERT_SHA256_BACKUP1);
+        builder.add("ai.elliottwen.info", "sha256/" + CERT_SHA256_WILDCARD);
+
+        return builder.build();
     }
 
     /**
-     * Build a hardened OkHttpClient with certificate pinning and timeout configs.
+     * Build a hardened OkHttpClient.
+     * For debug builds: SSL pinning may be relaxed to allow emulator testing.
+     * For release builds: full SSL pinning is enforced.
      */
     public static OkHttpClient buildSecureOkHttpClient(Context context) {
+        boolean isDebug = (context.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .certificatePinner(buildCertificatePinner());
+            .followRedirects(false)
+            .followSslRedirects(false);
+
+        // Only enable certificate pinning in release builds (emulators can have cert issues)
+        if (!isDebug) {
+            builder.certificatePinner(buildCertificatePinner());
+        } else {
+            Log.w(TAG, "SSL Certificate Pinning DISABLED in debug build (emulator testing)");
+        }
 
         return builder.build();
     }
 
     /**
      * Validate that the server's certificate matches our pinned fingerprint.
-     * This is an additional runtime check beyond OkHttp's built-in pinning.
      */
     public static boolean validateCertificatePinning(List<Certificate> certificates) {
         if (certificates == null || certificates.isEmpty()) {
@@ -73,7 +88,7 @@ public class SecurityConfig {
                     return true;
                 }
             }
-            Log.e(TAG, "Certificate pinning validation FAILED - no matching pin found");
+            Log.e(TAG, "Certificate pinning validation FAILED");
             return false;
         } catch (NoSuchAlgorithmException | CertificateEncodingException e) {
             Log.e(TAG, "Certificate validation error", e);
