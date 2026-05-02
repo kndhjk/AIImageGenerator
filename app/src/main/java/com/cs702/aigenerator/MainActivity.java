@@ -9,6 +9,9 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.os.Bundle;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -96,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         showLoading(true);
-        binding.tvPlaceholder.setVisibility(View.GONE);
+        binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
         // Step 1: Authenticate
@@ -169,14 +172,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showImage(String imageUrl) {
-        binding.progressBar.setVisibility(View.GONE);
-        binding.btnCancel.setVisibility(View.GONE);
+        showLoading(false);
 
         Glide.with(this)
                 .load(imageUrl)
                 .into(binding.ivImage);
 
-        binding.ivImage.setImageDrawable(null);
         binding.btnSave.setEnabled(true);
 
         // Download bitmap in background for saving
@@ -198,18 +199,18 @@ public class MainActivity extends AppCompatActivity {
 
     private void showLoading(boolean show) {
         if (show) {
-            binding.progressBar.setVisibility(View.VISIBLE);
+            binding.loadingOverlay.setVisibility(View.VISIBLE);
             binding.btnCancel.setVisibility(View.VISIBLE);
             binding.ivImage.setImageDrawable(null);
         } else {
-            binding.progressBar.setVisibility(View.GONE);
+            binding.loadingOverlay.setVisibility(View.GONE);
             binding.btnCancel.setVisibility(View.GONE);
         }
     }
 
     private void onError(String message) {
         showLoading(false);
-        binding.tvPlaceholder.setVisibility(View.VISIBLE);
+        binding.placeholderContainer.setVisibility(View.VISIBLE);
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
@@ -218,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
             currentCall.cancel();
         }
         showLoading(false);
-        binding.tvPlaceholder.setVisibility(View.VISIBLE);
+        binding.placeholderContainer.setVisibility(View.VISIBLE);
     }
 
     private void checkPermissionAndSave() {
