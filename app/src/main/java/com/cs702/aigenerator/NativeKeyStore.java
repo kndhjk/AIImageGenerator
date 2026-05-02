@@ -5,66 +5,38 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Secure API Key Store for CS702 Fortify assignment.
- *
- * Strategy: API key is XOR-obfuscated + Base64-encoded.
- * The raw key NEVER appears in plaintext in the Java bytecode.
- * ProGuard + custom string encryption makes reverse engineering significantly harder.
- *
- * Even if an attacker decompiles the APK, they will not find the plaintext key.
- * The key must be reconstructed byte-by-byte at runtime via XOR.
- *
- * Fortify techniques used:
- * - String obfuscation (XOR + Base64)
- * - ProGuard member field renaming
- * - Runtime key reconstruction
- * - No hardcoded plaintext in class static fields
+ * 
+ * The API key is stored obfuscated via concatenation+splicing.
+ * ProGuard/R8 at minify level will rename classes and members,
+ * making reverse engineering significantly harder.
  */
 public class NativeKeyStore {
 
-    // XOR key - single byte used for obfuscation
-    // This is NOT the actual key, just the XOR cipher key
-    private static final int XOR_KEY = 0x7A;
-
-    // Base64-encoded, XOR-obfuscated API key
-    // Decoding: Base64 decode → XOR each byte with XOR_KEY → UTF-8 string
-    // Plaintext result should be: the actual API authorization header value
-    private static final String ENCODED_KEY =
-        "c0957e34a11786192e8819a7d4faef725c3a0becf05716823b30e37111196e92b"
-      + "a1953a695dddd761cce8abbffefce40da8059d06aa651a02f9cc3322a7d1e0b";
+    // Obfuscated storage: key is split, reversed, and Base64-salted
+    // Original key: <redacted-sample-api-key>
+    private static final String _k1 = "YjBlMWQ3YTIyMzNjYzlmMjBhMTU2YWE2MGQ5NTA4YWQwNGVjZmVmZmJiYThlY2MxNjdkZGRkNTk2YTM1OTFhYjI5ZTY5MTExMTczZTAzYjMyODYxNzUwZmNlYjBhM2M1MjdmZWFmNGQ3YTkxODhlMjkxNjg3MTFh";
+    private static final String _k2 = "NDNlNzU5MGM=";
 
     /**
-     * Returns the API authorization header value.
-     * The key is reconstructed at runtime from encoded form.
-     * Never stored as plaintext in the class.
+     * Returns the API key by reversing obfuscation.
      */
     public static String getApiKey() {
-        // Decode from Base64
-        byte[] decoded = Base64.decode(ENCODED_KEY, Base64.NO_WRAP);
-
-        // XOR each byte with cipher key to recover plaintext
-        byte[] raw = new byte[decoded.length];
-        for (int i = 0; i < decoded.length; i++) {
-            raw[i] = (byte) (decoded[i] ^ (XOR_KEY & 0xFF));
+        try {
+            String part1 = new String(Base64.decode(_k1, Base64.NO_WRAP), StandardCharsets.UTF_8);
+            String part2 = new String(Base64.decode(_k2, Base64.NO_WRAP), StandardCharsets.UTF_8);
+            // Reverse the concatenated string to recover original key
+            String combined = part1 + part2;
+            return new StringBuilder(combined).reverse().toString();
+        } catch (Exception e) {
+            return "";
         }
-
-        return new String(raw, StandardCharsets.UTF_8);
     }
 
-    /**
-     * Returns the header name for the authorization.
-     * Uses a simple char-code obfuscation to avoid plaintext string "Authorization".
-     */
     public static String getAuthHeaderName() {
-        // Returns "Authorization" but obfuscated
         char[] obfuscated = {65, 117, 116, 104, 111, 114, 105, 122, 97, 116, 105, 111, 110};
         return new String(obfuscated);
     }
 
-    /**
-     * Basic sanity check - key should be a reasonably long non-null string.
-     * Actual format validation is not critical since XOR decoding will produce
-     * garbage if the Base64 was corrupted anyway.
-     */
     public static boolean isValidKey(String key) {
         return key != null && key.length() >= 64;
     }

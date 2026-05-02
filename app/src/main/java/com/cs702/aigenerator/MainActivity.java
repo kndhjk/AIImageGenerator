@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
@@ -54,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap lastGeneratedBitmap;
     private String lastGeneratedImageUrl;
 
+    private static final String TAG = "AIImageGen.Main";
     private static final String BASE_URL = "https://ai.elliottwen.info/";
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
@@ -71,20 +73,25 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        Log.d(TAG, "onCreate: initializing ApiService");
         setupApiService();
         setupClickListeners();
+        Log.d(TAG, "onCreate: done, btnGenerate=" + binding.btnGenerate);
     }
 
     private void setupApiService() {
+        Log.d(TAG, "setupApiService: building OkHttpClient with logging");
+
         // FORTIFY: Use SSL pinning via SecurityConfig
         OkHttpClient.Builder builder = SecurityConfig.buildSecureOkHttpClient(getApplicationContext()).newBuilder();
 
-        // Add logging interceptor in debug builds for diagnosis
+        // Add logging interceptor in debug builds to diagnose network issues
         HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
         logging.setLevel(HttpLoggingInterceptor.Level.BODY);
         builder.addInterceptor(logging);
 
         OkHttpClient client = builder.build();
+        Log.d(TAG, "setupApiService: OkHttpClient built, logging=" + logging.getLevel());
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
@@ -93,42 +100,61 @@ public class MainActivity extends AppCompatActivity {
                 .build();
 
         apiService = retrofit.create(ApiService.class);
+        Log.d(TAG, "setupApiService: ApiService created, baseUrl=" + retrofit.baseUrl());
     }
 
     private void setupClickListeners() {
-        binding.btnGenerate.setOnClickListener(v -> generateImage());
+        binding.btnGenerate.setOnClickListener(v -> {
+            Log.d(TAG, "btnGenerate clicked!");
+            generateImage();
+        });
         binding.btnSave.setOnClickListener(v -> checkPermissionAndSave());
         binding.btnCancel.setOnClickListener(v -> cancelRequest());
     }
 
     private void generateImage() {
+        Log.d(TAG, "generateImage: START");
+
         String prompt = binding.etPrompt.getText().toString().trim();
+        Log.d(TAG, "generateImage: prompt='" + prompt + "'");
+
         if (prompt.isEmpty()) {
+            Log.d(TAG, "generateImage: empty prompt");
             Toast.makeText(this, R.string.error_empty_prompt, Toast.LENGTH_SHORT).show();
             return;
         }
 
         // FORTIFY: Get API key from obfuscated storage
         String apiKey = NativeKeyStore.getApiKey();
+        Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
+        Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isValidKey(apiKey));
+
         if (!NativeKeyStore.isValidKey(apiKey)) {
+            Log.d(TAG, "generateImage: invalid key");
             Toast.makeText(this, "Security error: invalid API key configuration", Toast.LENGTH_LONG).show();
             return;
         }
 
+        Log.d(TAG, "generateImage: showing loading");
         showLoading(true);
         binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
+        Log.d(TAG, "generateImage: calling apiService.auth()");
         // Step 1: Authenticate with API key
         apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
+                Log.d(TAG, "auth onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
                 if (!response.isSuccessful() || response.body() == null) {
+                    Log.d(TAG, "auth failed: " + response.code());
                     onError(getString(R.string.error_auth));
                     return;
                 }
 
                 String signature = response.body().getSignature();
+                Log.d(TAG, "auth success: signature=" + (signature != null ? signature.substring(0, 20) : "null"));
+
                 if (signature == null || signature.isEmpty()) {
                     onError(getString(R.string.error_auth));
                     return;
@@ -136,9 +162,11 @@ public class MainActivity extends AppCompatActivity {
 
                 // Step 2: Generate image with signature from auth
                 GenerateRequest request = new GenerateRequest(signature, prompt);
+                Log.d(TAG, "generateImage: calling apiService.generateImage()");
                 apiService.generateImage(apiKey, request).enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                        Log.d(TAG, "generate onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
                         if (!response.isSuccessful() || response.body() == null) {
                             onError(getString(R.string.error_generation));
                             return;
@@ -150,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
                             if (raw.startsWith("\"")) raw = raw.substring(1, raw.length() - 1);
                             raw = raw.trim();
 
+                            Log.d(TAG, "generate raw response: " + raw);
                             if (raw.isEmpty()) {
                                 onError(getString(R.string.error_generation));
                                 return;
@@ -166,6 +195,7 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onFailure(Call<ResponseBody> call, Throwable t) {
+                        Log.d(TAG, "generate onFailure: " + t.getMessage());
                         if (!call.isCanceled()) {
                             onError(getString(R.string.error_network));
                         }
@@ -175,6 +205,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
+                Log.d(TAG, "auth onFailure: " + t.getMessage());
                 if (!call.isCanceled()) {
                     onError(getString(R.string.error_network));
                 }
@@ -183,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showImage(String imageUrl) {
+        Log.d(TAG, "showImage: " + imageUrl);
         showLoading(false);
 
         Glide.with(this)
@@ -220,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onError(String message) {
+        Log.d(TAG, "onError: " + message);
         showLoading(false);
         binding.placeholderContainer.setVisibility(View.VISIBLE);
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
