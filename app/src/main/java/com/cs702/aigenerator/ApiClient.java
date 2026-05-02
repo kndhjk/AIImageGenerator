@@ -2,17 +2,18 @@ package com.cs702.aigenerator;
 
 import android.content.Context;
 import okhttp3.OkHttpClient;
-import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * API Client singleton with security hardening for Fortify assignment.
  *
- * Security features enabled:
+ * Security features (release builds):
  * - SSL Certificate Pinning (prevents MITM attacks)
  * - Custom timeouts (prevents resource exhaustion)
- * - Logging interceptor removed in release builds
+ * - Redirect disabled (prevents DNS rebinding)
+ *
+ * Note: SSL pinning is automatically disabled in debug builds for emulator testing.
  */
 public class ApiClient {
 
@@ -21,22 +22,7 @@ public class ApiClient {
 
     public static synchronized ApiService getApiService(Context context) {
         if (apiService == null) {
-
-            // Build hardened OkHttpClient with SSL Pinning
             OkHttpClient client = SecurityConfig.buildSecureOkHttpClient(context);
-
-            // Add logging interceptor only for debug builds
-            HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-            logging.setLevel(HttpLoggingInterceptor.Level.BODY);
-
-            // In release, we don't add logging interceptor to avoid leaking sensitive data
-            client = client.newBuilder()
-                // Keep certificate pinner from SecurityConfig
-                .certificatePinner(SecurityConfig.buildCertificatePinner())
-                // Disable redirect to prevent DNS rebinding
-                .followRedirects(false)
-                .followSslRedirects(false)
-                .build();
 
             Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
