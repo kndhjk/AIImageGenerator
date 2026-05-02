@@ -52,15 +52,20 @@ public class SecurityConfig {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .followRedirects(false)
-            .followSslRedirects(false);
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS);
 
-        // Only enable certificate pinning in release builds (emulators can have cert issues)
+        // Only enable certificate pinning in release builds
         if (!isDebug) {
             builder.certificatePinner(buildCertificatePinner());
         } else {
             Log.w(TAG, "SSL Certificate Pinning DISABLED in debug build (emulator testing)");
+        }
+
+        // Add logging in debug builds to diagnose network issues
+        if (isDebug) {
+            okhttp3.logging.HttpLoggingInterceptor logging = new okhttp3.logging.HttpLoggingInterceptor();
+            logging.setLevel(okhttp3.logging.HttpLoggingInterceptor.Level.BODY);
+            builder.addInterceptor(logging);
         }
 
         return builder.build();

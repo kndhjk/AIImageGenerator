@@ -10,8 +10,8 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.LinearLayout;
 import android.widget.Toast;
+
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -102,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
             .setTitle("🔐 Security Warning")
             .setMessage(message.toString())
             .setPositiveButton("Continue Anyway", (dialog, which) -> {
-                // User acknowledges risk but chooses to continue
                 android.util.Log.w("SecurityConfig", "User acknowledged root device risk");
             })
             .setNegativeButton("Exit", (dialog, which) -> {
@@ -150,9 +149,9 @@ public class MainActivity extends AppCompatActivity {
         binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
-        // Step 1: Authenticate with protected API key
-        String authHeader = NativeKeyStore.getAuthHeaderName() + ": " + apiKey;
-        apiService.auth(authHeader).enqueue(new Callback<AuthResponse>() {
+        // Step 1: Authenticate with API key
+        // The @Header("Authorization") annotation sets the header name automatically
+        apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
                 if (!response.isSuccessful() || response.body() == null) {
@@ -168,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // Step 2: Generate image with signature from auth
                 GenerateRequest request = new GenerateRequest(signature, prompt);
-                apiService.generateImage(authHeader, request).enqueue(new Callback<ResponseBody>() {
+                apiService.generateImage(apiKey, request).enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                         if (!response.isSuccessful() || response.body() == null) {
