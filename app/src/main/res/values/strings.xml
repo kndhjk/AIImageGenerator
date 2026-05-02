@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AI Generator</string>
     <string name="app_title">✨ AI Image Generator</string>
     <string name="hint_prompt">Describe your image…</string>
     <string name="btn_generate">Generate</string>
     <string name="btn_save">Save</string>
     <string name="btn_cancel">Cancel</string>
-    <string name="placeholder_text">Your image will appear here</string>
-    <string name="desc_generated_image">Generated image</string>
+    <string name="desc_generated_image">AI generated image</string>
+    <string name="placeholder_text">Your image will appear here ✨</string>
     <string name="error_empty_prompt">Please enter a prompt</string>
-    <string name="error_network">Network error. Please try again.</string>
-    <string name="error_auth">Authentication failed.</string>
-    <string name="error_generation">Image generation failed.</string>
-    <string name="success_saved">Image saved!</string>
-    <string name="error_save">Failed to save image.</string>
-    <string name="btn_retry">Retry</string>
+    <string name="error_auth">Authentication failed. Check your API key.</string>
+    <string name="error_generation">Generation failed. Please try again.</string>
+    <string name="error_network">Network error. Check your connection.</string>
+    <string name="error_save">Failed to save image</string>
+    <string name="success_saved">Image saved to gallery! 🎉</string>
 </resources>
