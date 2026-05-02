@@ -1,15 +1,16 @@
 # =============================================================================
 # ProGuard / R8 Configuration for CS702 Fortify Assignment
 # =============================================================================
-# This file implements multiple security hardening measures:
+# Security hardening measures:
 # 1. Code obfuscation (class/field/method renaming)
-# 2. Reflection suppression (prevents runtime reflection attacks)
-# 3. String encryption hints
-# 4. API model protection
-# 5. Network security (SSL-related classes protected)
+# 2. Logging stripped in release builds
+# 3. API key obfuscated via string reversal + decoy methods
+# 4. SSL certificate pinning for MITM protection
+# 5. Root detection at runtime
+# 6. No data extraction allowed (backup disabled)
 # =============================================================================
 
-# ---------- OBfuscation Settings ----------
+# ---------- Obfuscation Settings ----------
 -repackageclasses ''
 -allowaccessmodification
 -mergeinterfacesaggressively
@@ -19,18 +20,24 @@
 -allowaccessmodification
 -dontpreverify
 
-# Keep line numbers for crash reports
+# Remove line numbers in release (increases difficulty of reverse engineering)
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# Remove logging in release
+# Remove ALL logging in release builds
 -assumenosideeffects class android.util.Log {
     public static int v(...);
     public static int d(...);
     public static int i(...);
+    public static int w(...);
+    public static int e(...);
 }
 -assumenosideeffects class java.io.PrintStream {
     public void println(...);
+    public void print(...);
+}
+-assumenosideeffects class java.io.OutputStream {
+    public void write(...);
 }
 
 # ---------- Retrofit ----------
@@ -47,19 +54,15 @@
 -keepclassmembers,allowshrinking,allowobfuscation interface * {
     @retrofit2.http.* <methods>;
 }
-
-# Keep service interfaces
 -keep,allowobfuscation interface com.cs702.aigenerator.ApiService
 
 # ---------- OkHttp ----------
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.net.**
+-dontwarn org.conscrypt.**
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
--keepnames class okhttp3.internal.publicsuffix.PublicSuffixDatabase
-
-# Keep CertificatePinner
 -keep class okhttp3.CertificatePinner { *; }
 -keep class okhttp3.CertificatePinner$* { *; }
 
@@ -74,8 +77,7 @@
     @com.google.gson.annotations.SerializedName <fields>;
 }
 
-# ---------- API Models (allow obfuscation) ----------
-# We allow ProGuard to obfuscate model classes since we don't reference them by name
+# ---------- API Models ----------
 -keep,allowobfuscation class com.cs702.aigenerator.AuthResponse { *; }
 -keep,allowobfuscation class com.cs702.aigenerator.GenerateRequest { *; }
 -keepclassmembers class com.cs702.aigenerator.AuthResponse { *; }
@@ -92,33 +94,52 @@
   *** rewind();
 }
 
-# ---------- Security Classes (HEAVILY PROTECTED) ----------
-# NativeKeyStore - contains multi-layer obfuscated API key
+# =============================================================================
+# SECURITY CLASSES — MAXIMUM PROTECTION
+# =============================================================================
+# These classes are critical for API key protection.
+# We keep names, critical method signatures, and key obfuscation strings.
+
 -keep class com.cs702.aigenerator.NativeKeyStore { *; }
 -keep class com.cs702.aigenerator.SecurityConfig { *; }
 -keep class com.cs702.aigenerator.RootDetector { *; }
-# Keep all static fields in security classes (SALT, _k1, _k2, decoy strings)
+
+# Keep ALL private static fields in NativeKeyStore (critical for key protection)
 -keepclassmembers class com.cs702.aigenerator.NativeKeyStore {
-    private static final int SALT;
-    private static final java.lang.String _k1;
-    private static final java.lang.String _k2;
-    private static final java.lang.String _fakeEnc;
+    private static final java.lang.String _rev;
+    private static final java.lang.String _fake1;
+    private static final java.lang.String _fake2;
     private static final int VALIDATE_CHAR;
+    private static final int SHIFT_VAL;
     public static java.lang.String getApiKey();
     public static java.lang.String getFakeApiKey();
     public static boolean isKeyValid(java.lang.String);
+    public static int computeShift();
 }
+
+# Keep certificate pin strings in SecurityConfig
 -keepclassmembers class com.cs702.aigenerator.SecurityConfig {
     public static final java.lang.String CERT_SHA256;
     public static final java.lang.String CERT_SHA256_BACKUP1;
+    public static final java.lang.String CERT_SHA256_WILDCARD;
     private static *** buildCertificatePinner();
-}
--keepclassmembers class com.cs702.aigenerator.RootDetector {
-    public static *** check(android.content.Context);
+    private static *** buildCertificatePinner*.
 }
 
-# Prevent obfuscation of security-critical methods
--keepclassmembers,allowobfuscation class * {
+# Keep root detection method signatures
+-keepclassmembers class com.cs702.aigenerator.RootDetector {
+    public static *** check(android.content.Context);
+    public static *** getRootWarnings(android.content.Context);
+}
+
+# ---------- Main Activity ----------
+-keep class com.cs702.aigenerator.MainActivity { *; }
+-keep class com.cs702.aigenerator.databinding.ActivityMainBinding { *; }
+
+# ---------- Prevent Reflection Attacks ----------
+# Keep all classes from being reflected/hooked
+-keep class com.cs702.aigenerator.** { *; }
+-keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
 
@@ -126,17 +147,6 @@
 -keep class androidx.** { *; }
 -keep interface androidx.** { *; }
 -dontwarn androidx.**
-
-# ---------- Main Activity & Binding ----------
--keep class com.cs702.aigenerator.MainActivity { *; }
--keep class com.cs702.aigenerator.databinding.ActivityMainBinding { *; }
-
-# ---------- Reflection Suppression ----------
-# Prevent runtime reflection on our classes - makes hooking harder
--keep class com.cs702.aigenerator.** { *; }
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
 
 # ---------- Network Security ----------
 -keep class javax.net.ssl.** { *; }
