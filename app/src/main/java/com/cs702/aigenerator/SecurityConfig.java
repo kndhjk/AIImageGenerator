@@ -21,13 +21,13 @@ public class SecurityConfig {
 
     // SHA-256 fingerprint of ai.elliottwen.info certificate (Cloudflare)
     // Fetched via: openssl s_client -connect ai.elliottwen.info:443
-    public static final String CERT_SHA256 = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
+    public static final String CERT_SHA256 = "JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=";
 
     // Backup pins - Cloudflare intermediate CA
-    public static final String CERT_SHA256_BACKUP1 = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
+    public static final String CERT_SHA256_BACKUP1 = "JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=";
 
     // Wildcard cert for *.elliottwen.info
-    public static final String CERT_SHA256_WILDCARD = "3rZyrzZdM7XRbcJRlxhhiA0TstYV7KKtUnolImZIRHI=";
+    public static final String CERT_SHA256_WILDCARD = "JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=";
 
     public static CertificatePinner buildCertificatePinner() {
         CertificatePinner.Builder builder = new CertificatePinner.Builder();

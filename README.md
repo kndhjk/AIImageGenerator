@@ -11,12 +11,38 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 ## Security (Fortify — Part 2)
 
-The app protects its API key against decompilation by peers:
+### 8-Layer API Key Protection
 
-- **String Reversal Obfuscation**: The Authorization token is stored reversed as a plain ASCII string — not in plaintext anywhere in the bytecode
-- **Decoy Methods**: Two public methods (`getFakeApiKey`, `isKeyValid`) contain fake Base64 strings that look like real keys but are never called at runtime — they confuse decompilers
-- **ProGuard/R8 Hardening**: All private static fields (`_rev`, `_fake1`, `_fake2`) are explicitly preserved; class/method names are renamed; logging is stripped in release builds
-- **Runtime Validation**: At decode time, the first character must be `'c'` — any tampering causes the key to return empty, silently failing authentication
+| Layer | Technique | Purpose |
+|-------|-----------|---------|
+| L1 | API key stored as **reversed hex string** in bytecode | Not readable as-is |
+| L2 | **JNI + native .so library** (libnative-key.so) | SHUFFLE table + XOR seed embedded in compiled ARM machine code — invisible to Java decompilers |
+| L3 | `getNativeKey(reversed)` → **undo-shuffle + undo-XOR** in native code | Key only reconstructed at runtime |
+| L4 | **Decoy methods** `getFakeApiKey()` + `isKeyValid()` | Return fake strings, never called — mislead decompilers |
+| L5 | **Runtime VALIDATE_CHAR** check | Detects bytecode tampering |
+| L6 | **ProGuard/R8 minification** | Removes logging, obfuscates class/field names |
+| L7 | **`android:fullBackupContent="false"`** + data extraction rules | Prevents cloud backup extraction |
+| L8 | **`android:debuggable="false"`** | Prevents adb data dir access in release |
+
+### SSL Certificate Pinning (OkHttp)
+
+- Pins to **SPKI SHA-256** of `ai.elliottwen.info` certificate
+- Disabled in debug builds for emulator testing
+- Pin: `JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=` (SubjectPublicKeyInfo hash)
+
+### Root Detection
+
+- Detects root/Magisk/Xposed at runtime
+- Shows a security warning (does not block usage)
+
+## Tech Stack
+
+- **Language**: Java 17 / Android API 34
+- **Networking**: Retrofit 2 + OkHttp 4.12 + Gson
+- **Image Loading**: Glide 4.16
+- **UI**: Material Components + ViewBinding
+- **Native**: Android NDK r27 (ARM cross-compilation)
+- **Build**: Gradle 8.4, minSdk 24
 
 ## API Flow
 
@@ -28,21 +54,14 @@ The app protects its API key against decompilation by peers:
 3. GET /images/xxx.jpg  → display
 ```
 
-## Tech Stack
-
-- **Language**: Java 17 / Android API 34
-- **Networking**: Retrofit 2 + OkHttp 4.12 + Gson
-- **Image Loading**: Glide 4.16
-- **UI**: Material Components + ViewBinding
-- **Build**: Gradle 8.4, minSdk 24
-
 ## Build
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug        # Debug APK (no minification)
+./gradlew assembleRelease       # Release APK (ProGuard minification, signed with debug keystore)
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`
+APK output: `app/build/outputs/apk/debug/app-debug.apk` or `app/build/outputs/apk/release/app-release-unsigned.apk`
 
 ## CI / Release
 
