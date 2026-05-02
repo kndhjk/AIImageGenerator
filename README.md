@@ -11,18 +11,12 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 ## Security (Fortify — Part 2)
 
-- **API Key Obfuscation**: Authorization token is stored using split-string + reverse + Base64 encoding — not stored in plaintext anywhere in the bytecode
-- **SSL Certificate Pinning**: OkHttp client pins to the `ai.elliottwen.info` certificate SHA-256 fingerprint (disabled in debug builds for emulator testing)
-- **ProGuard/R8 Minification**: Release builds apply code shrinking, symbol renaming, and logging removal
-- **Root Detection Warning**: App detects root/Magisk/Xposed and shows a security warning (does not block usage)
+The app protects its API key against decompilation by peers:
 
-## Tech Stack
-
-- **Language**: Java 17 / Android API 34
-- **Networking**: Retrofit 2 + OkHttp 4.12 + Gson
-- **Image Loading**: Glide 4.16
-- **UI**: Material Components + ViewBinding
-- **Build**: Gradle 8.4, minSdk 24
+- **String Reversal Obfuscation**: The Authorization token is stored reversed as a plain ASCII string — not in plaintext anywhere in the bytecode
+- **Decoy Methods**: Two public methods (`getFakeApiKey`, `isKeyValid`) contain fake Base64 strings that look like real keys but are never called at runtime — they confuse decompilers
+- **ProGuard/R8 Hardening**: All private static fields (`_rev`, `_fake1`, `_fake2`) are explicitly preserved; class/method names are renamed; logging is stripped in release builds
+- **Runtime Validation**: At decode time, the first character must be `'c'` — any tampering causes the key to return empty, silently failing authentication
 
 ## API Flow
 
@@ -33,6 +27,14 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
    ← "images/xxx.jpg"  (plain string)
 3. GET /images/xxx.jpg  → display
 ```
+
+## Tech Stack
+
+- **Language**: Java 17 / Android API 34
+- **Networking**: Retrofit 2 + OkHttp 4.12 + Gson
+- **Image Loading**: Glide 4.16
+- **UI**: Material Components + ViewBinding
+- **Build**: Gradle 8.4, minSdk 24
 
 ## Build
 
