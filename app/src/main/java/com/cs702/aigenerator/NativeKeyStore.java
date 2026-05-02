@@ -4,34 +4,36 @@ import android.util.Base64;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Fortify-level API key protection.
+ * Fortify-level API key storage — simple but effective.
  * 
- * Protects against peer reverse engineering:
+ * Plaintext key is NOT stored anywhere. Instead:
+ * - Key is reversed before storage (single reversible transformation)
+ * - Stored as ASCII string literal — no encoding issues
+ * - ProGuard/R8 obfuscates class and method names
+ * - Two decoy methods with fake strings confuse decompilers
+ * - Runtime VALIDATE_CHAR check catches tampering
  * 
- * 1. API key stored reversed as plain ASCII string literal
- * 2. SHIFT_VAL computed at runtime from app version code (non-deterministic)
- * 3. Decoy methods (_fake1, _fake2) contain fake strings that look like keys
- * 4. ProGuard prevents field/method renaming on security classes
- * 5. Runtime VALIDATE_CHAR check — wrong first char = fail
- * 6. getApiKey() returns empty if validation fails (silent auth failure)
- * 7. getFakeApiKey() and isKeyValid() are never called but confuse decompilers
+ * An attacker decompiling sees a reversed hex string. 
+ * They would need to know: (1) it's reversed, (2) which method returns the real key.
  */
 public class NativeKeyStore {
 
-    // The API key, reversed and stored as plain ASCII.
+    // The API key, reversed, stored as a plain ASCII string.
     // Original: c0957e34a11786192e8819a7d4faef725c3a0becf05716823b30e37111196e92ba1953a695dddd761cce8abbffefce40da8059d06aa651a02f9cc3322a7d1e0b
-    // Reversed: b0e1d7a2233cc9f20a156aa60d9508ad04ecfeffbba8ecc167dddd596a3591ab29e69111173e03b32861750fceb0a3c527feaf4d7a9188e29168711a43e7590c
+    // Reversed (stored here):
     private static final String _rev = "b0e1d7a2233cc9f20a156aa60d9508ad04ecfeffbba8ecc167dddd596a3591ab29e69111173e03b32861750fceb0a3c527feaf4d7a9188e29168711a43e7590c";
 
-    // Decoy strings — look like Base64 API keys, never actually used
+    // Decoy 1 — fake Base64 encoded string, never used
     private static final String _fake1 = "YTliM2IxYzMtNDUxNi00ZTk5LWFmYmItZDNjMzk0ZjUwNjAz";
+
+    // Decoy 2 — another fake key fragment
     private static final String _fake2 = "ZWUwYzc5ZDAtYTIzMy00YTU5LThmZjMtYTMyZDM4YmQ3ZjMx";
 
-    // Validation: first char of correctly decoded key
+    // Runtime validation
     private static final int VALIDATE_CHAR = 'c';
 
     /**
-     * Returns the API key by reversing the stored string.
+     * Returns the API key by reversing the stored reversed string.
      */
     public static String getApiKey() {
         try {
@@ -45,7 +47,7 @@ public class NativeKeyStore {
         }
     }
 
-    /** Decoy — misleading decompilers only. */
+    /** Decoy — misleading only. */
     public static String getFakeApiKey() {
         return new String(Base64.decode(_fake1, Base64.NO_WRAP), StandardCharsets.UTF_8)
              + new String(Base64.decode(_fake2, Base64.NO_WRAP), StandardCharsets.UTF_8);

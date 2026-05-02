@@ -6,8 +6,20 @@ android {
     namespace 'com.cs702.aigenerator'
     compileSdk 34
 
+    defaultConfig {
+        applicationId "com.cs702.aigenerator"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        ndk {
+            abiFilters 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
     buildFeatures {
         viewBinding true
+        prefab true
     }
 
     defaultConfig {

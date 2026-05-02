@@ -117,53 +117,10 @@
     public static int computeShift();
 }
 
-# Keep certificate pin strings in SecurityConfig
+
+# Keep SecurityConfig cert pin strings
 -keepclassmembers class com.cs702.aigenerator.SecurityConfig {
     public static final java.lang.String CERT_SHA256;
     public static final java.lang.String CERT_SHA256_BACKUP1;
     public static final java.lang.String CERT_SHA256_WILDCARD;
-    private static *** buildCertificatePinner();
-    private static *** buildCertificatePinner*.
-}
-
-# Keep root detection method signatures
--keepclassmembers class com.cs702.aigenerator.RootDetector {
-    public static *** check(android.content.Context);
-    public static *** getRootWarnings(android.content.Context);
-}
-
-# ---------- Main Activity ----------
--keep class com.cs702.aigenerator.MainActivity { *; }
--keep class com.cs702.aigenerator.databinding.ActivityMainBinding { *; }
-
-# ---------- Prevent Reflection Attacks ----------
-# Keep all classes from being reflected/hooked
--keep class com.cs702.aigenerator.** { *; }
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
-# ---------- AndroidX ----------
--keep class androidx.** { *; }
--keep interface androidx.** { *; }
--dontwarn androidx.**
-
-# ---------- Network Security ----------
--keep class javax.net.ssl.** { *; }
--keepclassmembers class * extends javax.net.ssl.SSLSocketFactory {
-    <init>(...);
-}
-
-# ---------- Enum & Constants ----------
--keepclassmembers enum * {
-    public static **[] values();
-    public static ** valueOf(java.lang.String);
-}
-
-# ---------- Parcelable ----------
--keep class * implements android.os.Parcelable {
-    public static final android.os.Parcelable$Creator *;
-}
--keepclassmembers class * implements android.os.Parcelable {
-    static ** CREATOR;
 }
