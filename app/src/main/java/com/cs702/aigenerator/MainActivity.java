@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import okhttp3.OkHttpClient;
+import okhttp3.logging.HttpLoggingInterceptor;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -40,7 +41,6 @@ import retrofit2.converter.gson.GsonConverterFactory;
  * Main Activity for AI Image Generator - CS702 Assignment.
  *
  * Security features (Fortify part):
- * - Root detection with user warning dialog
  * - API key stored via XOR+Base64 obfuscation (NativeKeyStore)
  * - SSL Certificate Pinning via OkHttp + SecurityConfig
  * - Encrypted network traffic with pinned certificates
@@ -68,10 +68,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // FORTIFY: Root check before initializing app
-        performSecurityChecks();
-
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -79,42 +75,16 @@ public class MainActivity extends AppCompatActivity {
         setupClickListeners();
     }
 
-    private void performSecurityChecks() {
-        // FORTIFY: Root detection
-        RootDetector.RootCheckResult rootResult = RootDetector.check(getApplicationContext());
-        if (rootResult.isRooted) {
-            showRootWarningDialog(rootResult.warnings);
-        }
-    }
-
-    private void showRootWarningDialog(String[] warnings) {
-        StringBuilder message = new StringBuilder();
-        message.append("⚠️ Security Warning\n\n");
-        message.append("This device appears to be rooted or has root management tools installed.\n\n");
-        message.append("Your app may be vulnerable to security attacks. The API key could be compromised.\n\n");
-        message.append("Detected issues:\n");
-        for (String warning : warnings) {
-            message.append("• ").append(warning).append("\n");
-        }
-        message.append("\nDo you still want to continue?");
-
-        new AlertDialog.Builder(this)
-            .setTitle("🔐 Security Warning")
-            .setMessage(message.toString())
-            .setPositiveButton("Continue Anyway", (dialog, which) -> {
-                android.util.Log.w("SecurityConfig", "User acknowledged root device risk");
-            })
-            .setNegativeButton("Exit", (dialog, which) -> {
-                finish();
-                System.exit(0);
-            })
-            .setCancelable(false)
-            .show();
-    }
-
     private void setupApiService() {
         // FORTIFY: Use SSL pinning via SecurityConfig
-        OkHttpClient client = SecurityConfig.buildSecureOkHttpClient(getApplicationContext());
+        OkHttpClient.Builder builder = SecurityConfig.buildSecureOkHttpClient(getApplicationContext()).newBuilder();
+
+        // Add logging interceptor in debug builds for diagnosis
+        HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+        builder.addInterceptor(logging);
+
+        OkHttpClient client = builder.build();
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
@@ -150,7 +120,6 @@ public class MainActivity extends AppCompatActivity {
         binding.btnSave.setEnabled(false);
 
         // Step 1: Authenticate with API key
-        // The @Header("Authorization") annotation sets the header name automatically
         apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
