@@ -93,15 +93,20 @@
 }
 
 # ---------- Security Classes (HEAVILY PROTECTED) ----------
-# NativeKeyStore - contains obfuscated API key
+# NativeKeyStore - contains multi-layer obfuscated API key
 -keep class com.cs702.aigenerator.NativeKeyStore { *; }
 -keep class com.cs702.aigenerator.SecurityConfig { *; }
 -keep class com.cs702.aigenerator.RootDetector { *; }
+# Keep all static fields in security classes (SALT, _k1, _k2, decoy strings)
 -keepclassmembers class com.cs702.aigenerator.NativeKeyStore {
+    private static final int SALT;
+    private static final java.lang.String _k1;
+    private static final java.lang.String _k2;
+    private static final java.lang.String _fakeEnc;
+    private static final int VALIDATE_CHAR;
     public static java.lang.String getApiKey();
-    public static java.lang.String getAuthHeaderName();
-    private static final java.lang.String ENCODED_KEY;
-    private static final int XOR_KEY;
+    public static java.lang.String getFakeApiKey();
+    public static boolean isKeyValid(java.lang.String);
 }
 -keepclassmembers class com.cs702.aigenerator.SecurityConfig {
     public static final java.lang.String CERT_SHA256;
