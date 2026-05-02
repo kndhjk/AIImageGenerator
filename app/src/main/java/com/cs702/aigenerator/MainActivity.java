@@ -4,18 +4,17 @@ import android.Manifest;
 import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.os.Bundle;
 import android.view.View;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
 import android.widget.LinearLayout;
 import android.widget.Toast;
-
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -37,6 +36,16 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
+/**
+ * Main Activity for AI Image Generator - CS702 Assignment.
+ *
+ * Security features (Fortify part):
+ * - Root detection with user warning dialog
+ * - API key stored via XOR+Base64 obfuscation (NativeKeyStore)
+ * - SSL Certificate Pinning via OkHttp + SecurityConfig
+ * - Encrypted network traffic with pinned certificates
+ * - Cancel button for user control over network operations
+ */
 public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     private ApiService apiService;
@@ -44,11 +53,8 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private Bitmap lastGeneratedBitmap;
     private String lastGeneratedImageUrl;
-    private String currentSignature;
 
     private static final String BASE_URL = "https://ai.elliottwen.info/";
-    // Replace with your actual Authorization header from the course
-    private static final String AUTH_KEY = "<redacted-sample-api-key>";
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -62,6 +68,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // FORTIFY: Root check before initializing app
+        performSecurityChecks();
+
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -69,12 +79,43 @@ public class MainActivity extends AppCompatActivity {
         setupClickListeners();
     }
 
+    private void performSecurityChecks() {
+        // FORTIFY: Root detection
+        RootDetector.RootCheckResult rootResult = RootDetector.check(getApplicationContext());
+        if (rootResult.isRooted) {
+            showRootWarningDialog(rootResult.warnings);
+        }
+    }
+
+    private void showRootWarningDialog(String[] warnings) {
+        StringBuilder message = new StringBuilder();
+        message.append("⚠️ Security Warning\n\n");
+        message.append("This device appears to be rooted or has root management tools installed.\n\n");
+        message.append("Your app may be vulnerable to security attacks. The API key could be compromised.\n\n");
+        message.append("Detected issues:\n");
+        for (String warning : warnings) {
+            message.append("• ").append(warning).append("\n");
+        }
+        message.append("\nDo you still want to continue?");
+
+        new AlertDialog.Builder(this)
+            .setTitle("🔐 Security Warning")
+            .setMessage(message.toString())
+            .setPositiveButton("Continue Anyway", (dialog, which) -> {
+                // User acknowledges risk but chooses to continue
+                android.util.Log.w("SecurityConfig", "User acknowledged root device risk");
+            })
+            .setNegativeButton("Exit", (dialog, which) -> {
+                finish();
+                System.exit(0);
+            })
+            .setCancelable(false)
+            .show();
+    }
+
     private void setupApiService() {
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                .build();
+        // FORTIFY: Use SSL pinning via SecurityConfig
+        OkHttpClient client = SecurityConfig.buildSecureOkHttpClient(getApplicationContext());
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BASE_URL)
@@ -98,12 +139,20 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // FORTIFY: Get API key from obfuscated storage
+        String apiKey = NativeKeyStore.getApiKey();
+        if (!NativeKeyStore.isValidKey(apiKey)) {
+            Toast.makeText(this, "Security error: invalid API key configuration", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         showLoading(true);
         binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
-        // Step 1: Authenticate
-        apiService.auth(AUTH_KEY).enqueue(new Callback<AuthResponse>() {
+        // Step 1: Authenticate with protected API key
+        String authHeader = NativeKeyStore.getAuthHeaderName() + ": " + apiKey;
+        apiService.auth(authHeader).enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
                 if (!response.isSuccessful() || response.body() == null) {
@@ -117,11 +166,9 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
-                currentSignature = signature;
-
-                // Step 2: Generate image — server returns plain string like "images/xxx.jpg"
+                // Step 2: Generate image with signature from auth
                 GenerateRequest request = new GenerateRequest(signature, prompt);
-                apiService.generateImage(AUTH_KEY, request).enqueue(new Callback<ResponseBody>() {
+                apiService.generateImage(authHeader, request).enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                         if (!response.isSuccessful() || response.body() == null) {
@@ -131,11 +178,8 @@ public class MainActivity extends AppCompatActivity {
 
                         try {
                             // Server returns plain string like "images/xxx.jpg"
-                            String raw = response.body().string();
-                            // Remove surrounding quotes if present
-                            raw = raw.trim();
-                            if (raw.startsWith("\"")) raw = raw.substring(1);
-                            if (raw.endsWith("\"")) raw = raw.substring(0, raw.length() - 1);
+                            String raw = response.body().string().trim();
+                            if (raw.startsWith("\"")) raw = raw.substring(1, raw.length() - 1);
                             raw = raw.trim();
 
                             if (raw.isEmpty()) {
@@ -143,7 +187,6 @@ public class MainActivity extends AppCompatActivity {
                                 return;
                             }
 
-                            // Build full URL
                             String fullUrl = raw.startsWith("http") ? raw : BASE_URL + raw;
                             lastGeneratedImageUrl = fullUrl;
                             showImage(fullUrl);
@@ -186,9 +229,9 @@ public class MainActivity extends AppCompatActivity {
                 okhttp3.Request request = new okhttp3.Request.Builder().url(imageUrl).build();
                 okhttp3.Response response = new OkHttpClient().newCall(request).execute();
                 if (response.isSuccessful() && response.body() != null) {
-                    android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
-                    options.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888;
-                    lastGeneratedBitmap = android.graphics.BitmapFactory.decodeStream(
+                    BitmapFactory.Options options = new BitmapFactory.Options();
+                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+                    lastGeneratedBitmap = BitmapFactory.decodeStream(
                             response.body().byteStream(), null, options);
                 }
             } catch (Exception e) {
