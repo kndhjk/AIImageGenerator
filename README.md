@@ -180,7 +180,6 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 1. **Placeholder API Key**：`ApiClient.java` 中的 key 是课程占位符，提交前需替换为真实的 Canvas Authorization header
 2. **CS702 Part 3 Attack**：尚未开始
-3. **Group Formation Email**：需联系 jun.seo@auckland.ac.nz（截止日期已过）
 
 ---
 
