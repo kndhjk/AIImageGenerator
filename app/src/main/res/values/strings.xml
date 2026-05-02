@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">AI Image Generator</string>
     <string name="app_title">✨ AI Image Generator</string>
     <string name="hint_prompt">Describe your image…</string>
     <string name="btn_generate">Generate</string>
