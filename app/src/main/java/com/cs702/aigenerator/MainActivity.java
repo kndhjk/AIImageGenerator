@@ -76,6 +76,19 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onCreate: initializing ApiService");
         setupApiService();
         setupClickListeners();
+        // FORTIFY: Check for root/Magisk and show security warning
+        RootDetector.RootCheckResult rootCheck = RootDetector.check(getApplicationContext());
+        if (rootCheck.isRooted) {
+            StringBuilder sb = new StringBuilder();
+            for (String w : rootCheck.warnings) sb.append("• ").append(w).append("\n");
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("\u26a0\ufe0f Security Warning")
+                .setMessage("Root/Jailbreak detected:\n\n" + sb.toString() + "Your API key may be at risk.")
+                .setPositiveButton("I Understand", null)
+                .setCancelable(false)
+                .show();
+        }
+
         Log.d(TAG, "onCreate: done, btnGenerate=" + binding.btnGenerate);
     }
 
