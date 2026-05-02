@@ -8,10 +8,6 @@ android {
 
     buildFeatures {
         viewBinding true
-        // FORTIFY: Disable debugging in release
-        debuggable false
-        // FORTIFY: Extract native libraries
-        extractNativeLibs true
     }
 
     defaultConfig {
@@ -20,9 +16,6 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
-        // FORTIFY: Enable Java 8 desugaring for security APIs
-        multiDexEnabled false
     }
 
     buildTypes {
@@ -31,36 +24,23 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-            // FORTIFY: Disable debugging flags
-            debuggable false
-            jniDebuggable false
-
-            // Signing config - use your own keystore for submission
-            // signingConfig signingConfigs.debug
         }
         debug {
             minifyEnabled false
-            debuggable true
         }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
-        // FORTIFY: Enable core library desugaring
-        coreLibraryDesugaringEnabled false
     }
 
-    // FORTIFY: Enable resource shrinking (removes unused resources)
     aaptOptions {
         cruncherEnabled true
-        // Ignore PNG errors during release build
         ignoreAssetsPattern "!.svn:!.git:!.DS_Store"
     }
 
     lint {
-        // FORTIFY: Enable all security checks
         checkReleaseBuilds true
         abortOnError false
     }
@@ -86,7 +66,4 @@ dependencies {
 
     // Security
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
-
-    // MultiDex (if needed for large apps)
-    implementation 'androidx.multidex:multidex:2.0.1'
 }
