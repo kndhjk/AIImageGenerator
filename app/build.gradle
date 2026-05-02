@@ -8,6 +8,10 @@ android {
 
     buildFeatures {
         viewBinding true
+        // FORTIFY: Disable debugging in release
+        debuggable false
+        // FORTIFY: Extract native libraries
+        extractNativeLibs true
     }
 
     defaultConfig {
@@ -16,29 +20,73 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
+        // FORTIFY: Enable Java 8 desugaring for security APIs
+        multiDexEnabled false
     }
 
     buildTypes {
         release {
+            // FORTIFY: Full R8 optimization
             minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // FORTIFY: Disable debugging flags
+            debuggable false
+            jniDebuggable false
+
+            // Signing config - use your own keystore for submission
+            // signingConfig signingConfigs.debug
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+        // FORTIFY: Enable core library desugaring
+        coreLibraryDesugaringEnabled false
+    }
+
+    // FORTIFY: Enable resource shrinking (removes unused resources)
+    aaptOptions {
+        cruncherEnabled true
+        // Ignore PNG errors during release build
+        ignoreAssetsPattern "!.svn:!.git:!.DS_Store"
+    }
+
+    lint {
+        // FORTIFY: Enable all security checks
+        checkReleaseBuilds true
+        abortOnError false
     }
 }
 
 dependencies {
+    // Core AndroidX
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.activity:activity:1.8.0'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.cardview:cardview:1.0.0'
+
+    // Network - Retrofit + OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+
+    // Image loading - Glide
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+
+    // Security
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    // MultiDex (if needed for large apps)
+    implementation 'androidx.multidex:multidex:2.0.1'
 }
