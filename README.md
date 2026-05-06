@@ -157,6 +157,7 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 1. **Placeholder API Key**：`NativeKeyStore.java` 中的 key 是课程占位符，提交前需替换为真实的 Canvas Authorization header
 2. **CS702 Part 3 Attack**：尚未开始
+3. **提交前任务清单**：见 [`SUBMISSION_TODO_2026-05-06_zh.md`](./SUBMISSION_TODO_2026-05-06_zh.md)
 
 ---
 
