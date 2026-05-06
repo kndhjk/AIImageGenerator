@@ -161,9 +161,9 @@ public class MainActivity extends AppCompatActivity {
 
         String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
         Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
-        Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isValidKey(apiKey));
+        Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isKeyValid(apiKey));
 
-        if (!NativeKeyStore.isValidKey(apiKey)) {
+        if (!NativeKeyStore.isKeyValid(apiKey)) {
             Log.d(TAG, "generateImage: invalid key");
             Toast.makeText(this, "Security error: invalid API key configuration", Toast.LENGTH_LONG).show();
             return;

@@ -47,7 +47,7 @@ public class NativeKeyStore {
             String reversed = new StringBuilder(getEncodedBlob()).reverse().toString();
             if (nativeLoaded) {
                 String nativeKey = getNativeKey(reversed);
-                if (isValidKey(nativeKey)) {
+                if (isKeyValid(nativeKey)) {
                     return nativeKey;
                 }
             }
