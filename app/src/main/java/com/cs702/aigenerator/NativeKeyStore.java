@@ -1,39 +1,32 @@
 package com.cs702.aigenerator;
 
+import android.content.Context;
 import android.util.Base64;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Fortify-level API key protection using JNI + native library.
- * 
- * Layer 1 (Java): API key stored reversed as plain ASCII hex string (_rev)
- * Layer 2 (JNI): libnative-key.so holds SHUFFLE table + XOR_SEED in compiled machine code
- *   - getNativeKey(reversed) applies undo-shuffle + undo-XOR to reconstruct key
- *   - verifyNative(key) validates format
- * Layer 3: Two decoy methods with fake strings
- * Layer 4: ProGuard prevents field/method renaming on security classes
- * Layer 5: Runtime VALIDATE_CHAR check
- * 
- * Even if attacker decompiles Java, they see:
- * - _rev = reversed hex string (not the real key)
- * - System.loadLibrary("native-key") — can't reverse engineer compiled .so
- * - getNativeKey(rev) — can't determine behavior without reverse engineering ARM binary
+ * Layered API key protection.
+ *
+ * Notes:
+ * - raises reverse-engineering cost but does not make extraction impossible
+ * - debug builds stay usable; release builds become stricter
+ * - storage is split into fragments to reduce obvious one-string recovery
  */
 public class NativeKeyStore {
 
-    // Layer 1: Reversed hex string storage (ASCII — no encoding issues)
-    // Original key: <redacted-sample-api-key>
-    // Reversed and stored here:
-    private static final String _rev = "<redacted-sample-blob>";
+    // Original encoded blob is split and reordered to reduce easy recovery from one field.
+    private static final String _segB = "<redacted-seg-b>";
+    private static final String _segD = "<redacted-seg-d>";
+    private static final String _segA = "<redacted-seg-a>";
+    private static final String _segC = "<redacted-seg-c>";
 
-    // Decoy strings — look like Base64, never actually used
+    // Decoys — never used for the real key.
     private static final String _fake1 = "YTliM2IxYzMtNDUxNi00ZTk5LWFmYmItZDNjMzk0ZjUwNjAz";
     private static final String _fake2 = "ZWUwYzc5ZDAtYTIzMy00YTU5LThmZjMtYTMyZDM4YmQ3ZjMx";
 
-    // Validation: first char of correctly decoded key
     private static final int VALIDATE_CHAR = 'c';
+    private static final String EXPECTED_PACKAGE = "com.cs702.aigenerator";
 
-    // Native library loading
     private static boolean nativeLoaded = false;
 
     static {
@@ -41,72 +34,72 @@ public class NativeKeyStore {
             System.loadLibrary("native-key");
             nativeLoaded = true;
         } catch (UnsatisfiedLinkError e) {
-            // Native .so not available — fall back to pure Java
             nativeLoaded = false;
         }
     }
 
-    /**
-     * Get the API key.
-     * If native library is available: reverse (Java) → native undo-transform
-     * If native unavailable: pure Java reverse only
-     */
+    private static String getEncodedBlob() {
+        return _segA + _segB + _segC + _segD;
+    }
+
     public static String getApiKey() {
         try {
-            // Step 1: Java reverses the stored string
-            String reversed = new StringBuilder(_rev).reverse().toString();
-
-            // Step 2: If native library available, apply native transformation
+            String reversed = new StringBuilder(getEncodedBlob()).reverse().toString();
             if (nativeLoaded) {
                 String nativeKey = getNativeKey(reversed);
-                if (nativeKey != null && nativeKey.length() == 128 && nativeKey.charAt(0) == 'c') {
+                if (isValidKey(nativeKey)) {
                     return nativeKey;
                 }
             }
-
-            // Fallback: return Java-only reversed key
             return reversed;
         } catch (Exception e) {
             return "";
         }
     }
 
-    // ============ Native JNI methods ============
-    // These exist in libnative-key.so (compiled C, invisible to Java decompilers)
-    // Signature must match native C functions exactly
+    /**
+     * Context-aware accessor for production use.
+     * Release builds will refuse to return the key under obvious hook/tamper conditions.
+     */
+    public static String getApiKey(Context context) {
+        if (context == null) return getApiKey();
+        if (!EXPECTED_PACKAGE.equals(context.getPackageName())) {
+            return "";
+        }
+        if (RuntimeGuard.shouldBlockSensitiveOps(context)) {
+            return "";
+        }
 
-    /** Reconstruct key using native SHUFFLE table + XOR_SEED (in .so binary) */
+        String key = getApiKey();
+        if (RuntimeGuard.isDebugBuild(context)) {
+            return key;
+        }
+
+        // In release builds, require the native layer to participate.
+        if (!nativeLoaded) {
+            return "";
+        }
+        return key;
+    }
+
     private static native String getNativeKey(String reversedKey);
-
-    /** Validate key format via native check */
     private static native int verifyNative(String key);
 
-    // ============ Decoy methods ============
-    // These confuse decompilers — look like real key accessors but aren't called
-
-    /** Decoy — returns Base64-decoded fake string combination */
     public static String getFakeApiKey() {
         return new String(Base64.decode(_fake1, Base64.NO_WRAP), StandardCharsets.UTF_8)
              + new String(Base64.decode(_fake2, Base64.NO_WRAP), StandardCharsets.UTF_8);
     }
 
-    /** Decoy — simple length check, never used for real validation */
     public static boolean isKeyValid(String key) {
-        return key != null && key.length() > 50;
-    }
-
-    /** "Authorization" as char array — not visible as plain string in bytecode */
-    public static String getAuthHeaderName() {
-        char[] obfuscated = {65, 117, 116, 104, 111, 114, 105, 122, 97, 116, 105, 111, 110};
-        return new String(obfuscated);
-    }
-
-    /** Full validation — uses native check if available, else char-at check */
-    public static boolean isValidKey(String key) {
         if (key == null || key.length() < 64) return false;
         if (nativeLoaded) {
             return verifyNative(key) == 1;
         }
         return key.charAt(0) == VALIDATE_CHAR;
+    }
+
+    public static String getAuthHeaderName() {
+        char[] obfuscated = {65, 117, 116, 104, 111, 114, 105, 122, 97, 116, 105, 111, 110};
+        return new String(obfuscated);
     }
 }

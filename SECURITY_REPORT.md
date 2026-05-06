@@ -21,26 +21,37 @@ Without pinning, a man-in-the-middle (MITM) attacker could intercept HTTPS traff
 
 ---
 
-## 2. API Key Protection (String Obfuscation)
+## 2. API Key Protection (Vault-style Layering)
 
 ### Implementation
-The API authorization key is NOT stored as a plaintext string in the Java code. Instead, we use a multi-layer obfuscation scheme:
+The API authorization key is NOT stored as a plaintext string in Java. The current implementation uses a layered design inspired by the Vault challenge style:
 
-1. **XOR Cipher**: Each byte of the API key is XORed with a single-byte key (0x7A)
-2. **Base64 Encoding**: The XORed bytes are Base64-encoded and stored in `ENCODED_KEY`
-3. **Runtime Reconstruction**: At runtime, the key is decoded and XORed back to recover the plaintext
-4. **Char-Code Obfuscation**: The HTTP header name "Authorization" is stored as char codes to avoid plaintext strings
+1. **Fragmented storage**: the encoded key blob is split across `_segA/_segB/_segC/_segD`
+2. **Reordered assembly**: the final blob is reconstructed at runtime instead of appearing as one obvious constant
+3. **Reverse transform**: the assembled blob is reversed in Java
+4. **Native reconstruction**: `libnative-key.so` performs the final transformation via shuffle-table + XOR logic
+5. **Decoys**: fake key accessors remain to waste analyst time
+6. **Release guardrails**: release builds refuse to return the key if runtime hook/tamper signals are present
 
 ### Why This Matters
-Even if an attacker decompiles the APK using tools like jadx or apktool, they will find only the obfuscated form of the key. The plaintext key never appears in the DEX bytecode or string pools.
+This does **not** make extraction impossible, but it raises the cost materially:
+- there is no single plaintext key string in DEX
+- static analysis must recover the fragment order first
+- then understand the reverse step
+- then reverse the native transformation logic
+- and in release builds, the key path is blocked when obvious instrumentation is detected
 
 ### Code Reference
-- `NativeKeyStore.java` - `getApiKey()`, `getAuthHeaderName()`, `isValidKey()`
-- Key is XOR-encrypted with key `0x7A` before Base64 encoding
+- `NativeKeyStore.java` - `getApiKey(Context)`, `getEncodedBlob()`, `isKeyValid()`
+- `native-key.c` - `getNativeKey()` and `verifyNative()`
 
 ### Code Flow
 ```
-ENCODED_KEY (Base64) → XOR decode → Plaintext API key → HTTP Header
+segA + segB + segC + segD
+→ reverse in Java
+→ native unshuffle + XOR undo
+→ validate
+→ API key
 ```
 
 ---
@@ -66,7 +77,30 @@ When root is detected, the app displays a security warning dialog. Users can cho
 
 ---
 
-## 4. ProGuard/R8 Code Obfuscation
+## 4. Runtime Instrumentation / Hook Detection
+
+### Implementation
+A dedicated `RuntimeGuard` layer now checks for common dynamic-analysis signals:
+
+1. **Debugger detection** via `Debug.isDebuggerConnected()`
+2. **TracerPid detection** from `/proc/self/status`
+3. **Frida port probing** on `127.0.0.1` (`27042`, `27043`, `23946`)
+4. **Suspicious memory map scanning** for strings such as `frida`, `gadget`, `gum-js-loop`, `xposed`, `substrate`, `zygisk`, `magisk`
+5. **Suspicious package detection** for known instrumentation managers
+6. **RootDetector integration** to feed release-time blocking decisions
+
+### Behavior
+- **Debug builds** remain permissive to avoid breaking development
+- **Release builds** block sensitive operations (including API-key retrieval / generation flow) when suspicious runtime signals are present
+
+### Code Reference
+- `RuntimeGuard.java`
+- `MainActivity.java` startup checks
+- `NativeKeyStore.java` release-path enforcement
+
+---
+
+## 5. ProGuard/R8 Code Obfuscation
 
 ### Implementation
 The release build uses aggressive R8 optimization with the following measures:
@@ -89,7 +123,7 @@ The release build uses aggressive R8 optimization with the following measures:
 
 ---
 
-## 5. Network Security Configuration
+## 6. Network Security Configuration
 
 ### Implementation
 An `network_security_config.xml` is included to enforce cleartext traffic restrictions:
@@ -102,7 +136,7 @@ An `network_security_config.xml` is included to enforce cleartext traffic restri
 
 ---
 
-## 6. OkHttpClient Hardening
+## 7. OkHttpClient Hardening
 
 ### Additional Security Options Applied
 - `followRedirects(false)` - Prevents DNS rebinding attacks
@@ -116,7 +150,7 @@ An `network_security_config.xml` is included to enforce cleartext traffic restri
 
 ---
 
-## 7. Debug Flags Disabled
+## 8. Debug Flags Disabled
 
 ### Implementation
 In release builds:
@@ -135,7 +169,7 @@ This prevents `adb install -r` from attaching debuggers to the release APK, maki
 | MITM with forged cert | Certificate Pinning | ★★★★★ |
 | APK decompilation | XOR+Base64 obfuscation | ★★★☆☆ |
 | Root/Jailbreak detection | RootDetector checks | ★★★★☆ |
-| Dynamic analysis (Frida/Xposed) | Root/hooking framework detection | ★★★☆☆ |
+| Dynamic analysis (Frida/Xposed) | RuntimeGuard + root/hooking checks + release blocking | ★★★★☆ |
 | Debugger attachment | Debug flags disabled | ★★★☆☆ |
 | Network traffic interception | SSL Pinning + no HTTP | ★★★★★ |
 | API key extraction from strings | String obfuscation | ★★★☆☆ |
@@ -144,13 +178,13 @@ This prevents `adb install -r` from attaching debuggers to the release APK, maki
 
 ## Limitations & Future Improvements
 
-1. **Native Library Obfuscation**: The NDK-based approach would provide stronger key protection, but requires NDK toolchain. Current implementation uses pure-Java obfuscation.
+1. **No client-side defense is unbreakable**: Frida / repackaging resistance can only raise cost, not guarantee impossibility.
 
-2. **Code Integrity Checks**: A checksum/signature verification of the APK at runtime would detect tampering, but adds complexity.
+2. **Signature-bound integrity**: A stronger next step is binding key reconstruction to the app signing certificate digest in release builds.
 
-3. **Emulator Detection**: Basic emulator detection could be added to prevent analysis in sandboxed environments.
+3. **Server-side hardening**: Moving from static API key trust to short-lived server-issued tokens would reduce client secret exposure.
 
-4. **Network Traffic Encryption**: Beyond TLS, adding a second layer of encryption (e.g., HMAC-signed requests) would provide additional protection.
+4. **Emulator-specific policy**: Emulator detection can be added if you want to block analysis environments more aggressively, but it may affect QA/testing.
 
 ---
 
@@ -160,7 +194,8 @@ This prevents `adb install -r` from attaching debuggers to the release APK, maki
 |------|---------|
 | `SecurityConfig.java` | SSL Certificate Pinning configuration |
 | `NativeKeyStore.java` | XOR+Base64 obfuscated API key storage |
-| `RootDetector.java` | Root/hook detection with user warning |
+| `RootDetector.java` | Root / Magisk / dangerous package detection |
+| `RuntimeGuard.java` | Anti-debug / anti-Frida / runtime instrumentation checks |
 | `ApiClient.java` | Hardened OkHttpClient with pinning |
 | `MainActivity.java` | Security checks on startup, updated API calls |
 | `proguard-rules.pro` | Aggressive R8 obfuscation rules |
@@ -180,7 +215,12 @@ To test Root Detection:
 1. Install the app on a rooted device/emulator with Magisk
 2. The warning dialog should appear on app launch
 
+To test RuntimeGuard:
+1. Start a common Frida server port locally on a test device/emulator
+2. Launch a release build
+3. Sensitive operations should be blocked instead of returning the key
+
 To verify obfuscation:
-1. Use `apktool d app-release-unsigned.apk` to decompile
+1. Use `apktool d` or jadx on a release APK
 2. Search for the API key string - it should NOT appear in plaintext
-3. The `ENCODED_KEY` field should appear in `NativeKeyStore`
+3. Inspect `NativeKeyStore` and confirm the key blob is fragmented rather than stored as a single constant

@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onCreate: initializing ApiService");
         setupApiService();
         setupClickListeners();
-        // FORTIFY: Check for root/Magisk and show security warning
+
         RootDetector.RootCheckResult rootCheck = RootDetector.check(getApplicationContext());
         if (rootCheck.isRooted) {
             StringBuilder sb = new StringBuilder();
@@ -85,6 +85,19 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("\u26a0\ufe0f Security Warning")
                 .setMessage("Root/Jailbreak detected:\n\n" + sb.toString() + "Your API key may be at risk.")
                 .setPositiveButton("I Understand", null)
+                .setCancelable(false)
+                .show();
+        }
+
+        RuntimeGuard.ThreatReport threatReport = RuntimeGuard.inspect(getApplicationContext());
+        if (!RuntimeGuard.isDebugBuild(getApplicationContext()) && threatReport.suspicious) {
+            StringBuilder sb = new StringBuilder();
+            for (String r : threatReport.reasons) sb.append("• ").append(r).append("\n");
+            binding.btnGenerate.setEnabled(false);
+            new AlertDialog.Builder(this)
+                .setTitle("Security Lock")
+                .setMessage("Sensitive operations are blocked in this environment:\n\n" + sb)
+                .setPositiveButton("OK", null)
                 .setCancelable(false)
                 .show();
         }
@@ -98,10 +111,13 @@ public class MainActivity extends AppCompatActivity {
         // FORTIFY: Use SSL pinning via SecurityConfig
         OkHttpClient.Builder builder = SecurityConfig.buildSecureOkHttpClient(getApplicationContext()).newBuilder();
 
-        // Add logging interceptor in debug builds to diagnose network issues
         HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-        logging.setLevel(HttpLoggingInterceptor.Level.BODY);
-        builder.addInterceptor(logging);
+        if (RuntimeGuard.isDebugBuild(getApplicationContext())) {
+            logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+            builder.addInterceptor(logging);
+        } else {
+            logging.setLevel(HttpLoggingInterceptor.Level.NONE);
+        }
 
         OkHttpClient client = builder.build();
         Log.d(TAG, "setupApiService: OkHttpClient built, logging=" + logging.getLevel());
@@ -138,7 +154,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // FORTIFY: Get API key from obfuscated storage
-        String apiKey = NativeKeyStore.getApiKey();
+        if (RuntimeGuard.shouldBlockSensitiveOps(getApplicationContext())) {
+            onError("Security policy blocked this request on the current device");
+            return;
+        }
+
+        String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
         Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
         Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isValidKey(apiKey));
 

@@ -20,6 +20,7 @@
         android:theme="@style/Theme.AIImageGenerator"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false"
+        android:extractNativeLibs="false"
         android:debuggable="false"
         tools:targetApi="31">
 
