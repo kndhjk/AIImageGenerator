@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Debug;
+import android.os.Looper;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -66,7 +67,7 @@ public final class RuntimeGuard {
             reasons.add("Suspicious runtime mappings detected");
         }
 
-        if (hasFridaPort()) {
+        if (!isMainThread() && hasFridaPort()) {
             reasons.add("Instrumentation port detected");
         }
 
@@ -84,6 +85,10 @@ public final class RuntimeGuard {
     public static boolean shouldBlockSensitiveOps(Context context) {
         if (isDebugBuild(context)) return false;
         return inspect(context).suspicious;
+    }
+
+    private static boolean isMainThread() {
+        return Looper.getMainLooper() != null && Looper.myLooper() == Looper.getMainLooper();
     }
 
     private static boolean hasFridaPort() {
