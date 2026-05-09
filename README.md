@@ -1,194 +1,343 @@
 # AI Image Generator
 
-Android app for CS702 — Build & Fortify assignment. Generates AI images from text prompts using the `ai.elliottwen.info` API.
+AI Image Generator is an Android application developed for the CS702 Build & Fortify assignment. The app allows users to enter a text prompt, send the prompt to the official AI image generation server, display the generated image, and save the result to the local gallery.
+
+The project also includes several client-side hardening measures designed to make API key extraction and runtime tampering more difficult.
+
+> Important: client-side protection cannot make an API key impossible to extract. The security design in this project focuses on increasing the cost of reverse engineering, reducing accidental leakage, and defending against common static, dynamic, and network-based attacks.
 
 ---
 
-## 📦 当前版本 v1.0.2
+## 1. Main Features
 
-**APK 大小**：约 6 MB（含 3 架构 Native .so 库）
+### Build Requirements
 
-**最后更新**：2026-05-03
-
-**签名**：debug keystore（提交用），`minifyEnabled = false`（release）
-
-**MD5**：`c16a4aafd756ed04b8de94f6a3a9a3fb`
-
-**下载地址**：https://github.com/kndhjk/AIImageGenerator/releases/tag/v1.0.1
-
----
-
-## 🛠️ 开发日志
-
-### 2026-05-03 — Part 2 完成 + 生图最终修复
-
-**问题 11：getApiKey() 始终返回空，图片生成失败**
-
-排查：
-- `apiKey length=0` — getApiKey() 内部的 VALIDATE_CHAR 检查失败
-- 根因 1：`_rev` 存的是原始 key 直接翻转（无 XOR），但之前验证逻辑期望 88 字符（旧版 key 长度）
-- 根因 2：`StringBuilder.reverse().toString()` 经 JNI `GetStringUTFChars` 传递时字符编码异常，导致长度始终多出一倍
-- 根因 3：native `verifyNative()` 硬编码了 88 字符校验，而实际 key 是 128 字符
-
-修复：
-- 更新 `_rev` 为正确的 128 字符直接翻转 hex string
-- Java 层：不用 StringBuilder，改为手动 char[] 交换反转（`for i < n/2: swap`）
-- Native 层 `verifyNative()`：校验从 88 改为 128
-
-实测：`POST /auth 200` → `POST /generate_image 200` → 图片 URL 返回 ✅
-
-**问题 10（延续）： Frida 检测 + 安全增强**
-
-- 新增 `SecurityEnforcer.java`：Frida 检测（5法）、调试器检测、APK 签名校验
-- `RootDetector.java` 增强至 14 项检测（新增 Magisk / Zygisk 系统目录、magiskd 进程扫描）
-- 集成至 MainActivity：`SecurityEnforcer.sweep()` 在 RootDetector 之后运行
+| Requirement | Implementation Status |
+|---|---|
+| Text input box | Implemented. Users can enter image-generation prompts. |
+| API integration | Implemented. The app calls `/auth` first and then `/generate_image`. |
+| Image display | Implemented. The returned image URL is loaded and displayed using Glide. |
+| Save functionality | Implemented. The generated image can be saved to the Android gallery through MediaStore. |
+| User interface | Implemented. The UI includes prompt input, generate, save, cancel, loading state, and image preview. |
+| Reliability | Implemented. Loading and error handling are included. The cancel and save flows should be verified before final submission. |
+| Emulator support | The app is designed to run in a standard Android Studio emulator. This must be tested again before submission. |
 
 ---
 
-### 2026-05-03 — 凌晨调试（重要）
+## 2. API Workflow
 
-**问题 9：Release APK 所有网络请求超时**
+This application communicates directly with the AI ​​server provided in the CS702 course:
 
-现象：Release build 点 Generate 后一直转圈，最终报 network error。Debug build 正常。
-
-根因：**ProGuard/R8 minification 破坏了 OkHttp 内部反射调用链**（connectTimeout 等方法被优化掉）
-
-解决方案：`minifyEnabled = false`（release 不混淆）—— 这是唯一有效方案
-
-**问题 8：模拟器 DNS 解析到 IPv6 导致 SSL 超时**
-
-现象：模拟器 ping `ai.elliottwen.info` 一直通，但 HTTPS 请求超时。
-
-根因：模拟器 DNS 同时返回 IPv4 和 IPv6 地址。OkHttp 尝试 IPv6 路由到 Cloudflare 时端口 443 不通。HTTP/2 alt-svc 自动回退 IPv4 需要约 60 秒，导致超时。
-
-解决方案：启动模拟器时加 `-dns-server 8.8.8.8` 强制 Google DNS，解析到纯 IPv4。
-
-**问题 7：SSL Certificate Pinning 导致 Release 连接失败**
-
-根因：最初设置的 pin 是**完整证书 DER 的 SHA-256 摘要**，但 OkHttp `CertificatePinner` 验证的是 **SPKI（SubjectPublicKeyInfo）SHA-256 hash**。
-
-解决方案：用 OpenSSL 提取服务器真实 SPKI hash：`JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=`。
-
----
-
-## 🔐 安全等级说明（Fortify — Part 2）
-
-### 12 层 API Key 保护架构
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 1  │  bytecode：翻转 128 hex string `_rev`           │
-│  Layer 2  │  System.loadLibrary("native-key") 加载 .so       │
-│  Layer 3  │  手动 char[] reverse（不用 StringBuilder JNI）   │
-│  Layer 4  │  VALIDATE_CHAR='c' 运行时校验                   │
-│  Layer 5  │  JNI verifyNative() native 层格式校验           │
-│  Layer 6  │  clearKeyMemory() native 安全擦除               │
-│  Layer 7  │  诱饵方法 getFakeApiKey() / isKeyValid()        │
-│  Layer 8  │  ProGuard：删除所有 Log + 代码混淆               │
-│  Layer 9  │  android:fullBackupContent="false"             │
-│  Layer 10 │  Frida 检测（agent文件/proc maps/fd/端口/cmd） │
-│  Layer 11 │  调试器检测 + APK 签名校验                       │
-│  Layer 12 │  RootDetector 14 项检测（含 Magisk/Zygisk）    │
-└─────────────────────────────────────────────────────────────┘
+```text
+https://ai.elliottwen.info/
 ```
 
-### SSL Certificate Pinning
+The generation process follows two steps:
 
-- 目标：防止中间人攻击（MITM）
-- 实现：OkHttp `CertificatePinner` + SPKI SHA-256 pin
-- Pin 值：`JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=`
-- Debug build 关闭（方便测试），Release build 强制开启
+1. **Authentication**
+   - Endpoint: `POST /auth`
+   - Header: `Authorization: <provided authorization header>`
+   - Response: a short-lived digital signature.
 
-### Root Detection（14 项）
+2. **Image generation**
+   - Endpoint: `POST /generate_image`
+   - Header: `Authorization: <provided authorization header>`
+   - Body:
 
-| 检测项 | 方法 |
-|--------|------|
-| su 二进制路径 | 检查 16 个常见路径 |
-| test-keys | Build.TAGS 是否含 testkeys |
-| Root 包名 | 包列表含 Xposed/Substrate/Magisk |
-| 系统属性 | ro.build.tags / ro.secure |
-| su 命令执行 | 运行 `su -c id` 检查返回 |
-| **Magisk 目录** | `/data/adb/magisk`, `/data/adb/zygisk` |
-| **Magisk Manager** | `com.topjohnwu.magisk` 包名 |
-| **Zygisk 模块** | `/data/adb/modules/` 内容扫描 |
-| **MagiskSU** | `/data/adb/su/bin/su`, `magisk-su` |
-| **magiskd 进程** | `ps -A` 扫描 `magiskd` |
-
-### Frida 检测（5 法）
-
-1. `/data/local/tmp/frida-agent-arm64.so` 文件存在检测
-2. `/proc/self/maps` 含 "frida" / "linjector" 检测
-3. `/proc/self/fd` Frida 相关文件描述符检测
-4. Frida 默认端口（23947/23948/23949）监听检测
-5. `/proc/self/cmdline` 含 "frida" 检测
-
-### 安全评估
-
-| 攻击面 | 难度 | 说明 |
-|--------|------|------|
-| Java 反编译 | ★★★★☆ | `_rev` 可见但需手动反转，诱饵方法干扰 |
-| Frida Hook | ★★★★☆ | 5 种检测方法，部分阻断调试 |
-| Native 反汇编 | ★★★☆☆ | .so 仅含简单 reverse 操作 |
-| 网络抓包 | ★★★★★ | SSL Pinning 防止 MITM |
-| 备份提取 | ★★★★★ | fullBackupContent=false 阻止云备份 |
-
-**整体评级：高度安全**（防普通逆向工程师 + 网络层攻击）
-
----
-
-## 🐛 遇到的所有问题及解决方案汇总
-
-| # | 问题 | 根本原因 | 解决方案 |
-|---|------|----------|----------|
-| 1 | Auth header 401 | key 前加了 "Bearer " 前缀 | 直接传 key，不用前缀 |
-| 2 | Debug build 无法连接 | SSL Pinning 在模拟器上失败 | 检测 FLAG_DEBUGGABLE，Debug 跳过 Pinning |
-| 3 | isValidKey 一直失败 | key 包含大写字符，正则只接受小写 | 改为 `^[a-fA-F0-9]{88}$` |
-| 4 | 编译错误：CertificatePinner 重复 | 同时 import 了两个不同版本的类 | 只保留 okhttp3 版本 |
-| 5 | 构建失败 | `tools:targetApi` 位置错误 | 只保留在 `<manifest>` 标签 |
-| 6 | API key 解码后损坏 | XOR+Base64 多字节字符被当 UTF-8 转换 | 改用纯字符串反转（ASCII 安全） |
-| 7 | SSL Pinning Release 失败 | Pin 用了完整证书 DER SHA-256，而非 SPKI hash | 用 OpenSSL 提取正确 SPKI hash |
-| 8 | Release 所有请求超时 | R8/ProGuard 破坏了 OkHttp 内部反射调用链 | `minifyEnabled = false` |
-| 9 | 模拟器 HTTPS 超时 | DNS 同时返回 IPv4+IPv6，IPv6 路由不通 | 启动加 `-dns-server 8.8.8.8` |
-| 10 | getApiKey 始终返回空 | StringBuilder.reverse() JNI 编码异常；验证长度 88 而非 128 | 手动 char[] 交换；验证长度改为 128 |
-
----
-
-## ⚠️ 已知限制 / 待办
-
-1. **Placeholder API Key**：`NativeKeyStore.java` 中的 key 是课程占位符，提交前需替换为真实的 Canvas Authorization header
-2. **CS702 Part 3 Attack**：尚未开始
-3. **提交前任务清单**：见 [`SUBMISSION_TODO_2026-05-06_zh.md`](./SUBMISSION_TODO_2026-05-06_zh.md)
-
----
-
-## 📂 项目结构
-
+```json
+{
+  "signature": "<signature returned from /auth>",
+  "prompt": "<user prompt>"
+}
 ```
+
+The server returns an image path or URL. The app then displays the image in the main screen.
+
+---
+
+## 3. Project Structure
+
+```text
 AIImageGenerator/
 ├── app/
-│   ├── src/main/
-│   │   ├── cpp/native-key.c          # NDK C 源码（reverse + verify + secure clear）
-│   │   ├── java/com/cs702/aigenerator/
-│   │   │   ├── ApiClient.java        # 网络请求 + SSL Pinning
-│   │   │   ├── ApiService.java       # Retrofit 接口
-│   │   │   ├── ApiModels.java       # 数据模型
-│   │   │   ├── NativeKeyStore.java  # API key 12层保护
-│   │   │   ├── SecurityConfig.java  # SSL Pin 配置
-│   │   │   ├── RootDetector.java    # Root/越狱检测（14项）
-│   │   │   ├── SecurityEnforcer.java# Frida检测+调试器+签名校验
-│   │   │   └── MainActivity.java    # 主界面 + 调用各安全模块
-│   │   ├── res/xml/
-│   │   │   ├── network_security_config.xml
-│   │   │   └── data_extraction_rules.xml
-│   │   └── AndroidManifest.xml
-│   └── proguard-rules.pro
+│   ├── build.gradle
+│   ├── proguard-rules.pro
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── cpp/
+│       │   └── native-key.c
+│       ├── java/com/cs702/aigenerator/
+│       │   ├── ApiClient.java
+│       │   ├── ApiModels.java
+│       │   ├── ApiService.java
+│       │   ├── MainActivity.java
+│       │   ├── NativeKeyStore.java
+│       │   ├── RootDetector.java
+│       │   ├── RuntimeGuard.java
+│       │   └── SecurityConfig.java
+│       ├── jniLibs/
+│       │   ├── arm64-v8a/libnative-key.so
+│       │   ├── armeabi-v7a/libnative-key.so
+│       │   └── x86_64/libnative-key.so
+│       └── res/
+│           ├── layout/activity_main.xml
+│           ├── values/strings.xml
+│           └── xml/network_security_config.xml
+├── build.gradle
+├── gradle.properties
+├── settings.gradle
+├── SECURITY_REPORT.md
 └── README.md
 ```
 
 ---
 
-## 🔗 相关链接
+## 4. Main Code Components
 
+### `MainActivity.java`
+
+Responsible for the main app workflow:
+
+- Reads the user prompt.
+- Starts the authentication request.
+- Sends the image-generation request.
+- Displays the returned image.
+- Saves the generated image to the local gallery.
+- Shows loading and error states.
+- Connects UI buttons to their actions.
+
+### `ApiService.java`
+
+Defines the Retrofit API interfaces for:
+
+- `POST /auth`
+- `POST /generate_image`
+
+### `ApiModels.java`
+
+Defines request and response models used by Retrofit and Gson.
+
+### `SecurityConfig.java`
+
+Builds the hardened OkHttp client and configures SSL certificate pinning in release builds.
+
+### `NativeKeyStore.java` and `native-key.c`
+
+Implement layered API key reconstruction and validation logic. The authorization key is not stored as a single plaintext string in the Java source code. Instead, it is split into fragments and reconstructed at runtime, with native-layer participation.
+
+### `RootDetector.java`
+
+Checks for common root, Magisk, Xposed, Substrate, and other modified-environment indicators.
+
+### `RuntimeGuard.java`
+
+Checks for suspicious runtime conditions such as debugging, Frida-related traces, suspicious ports, and instrumentation indicators.
+
+---
+
+## 5. Fortify Implementation
+
+The app uses a defense-in-depth approach. The main purpose is to protect the API authorization key from simple extraction and reduce the success of common attacks.
+
+### 5.1 API Key Configuration
+
+For security reasons, the API authorization key is not stored as a single plaintext string in the Android source code.
+
+Before release, the real API key is processed by a temporary local encoding tool and then stored in `NativeKeyStore.java` as several encoded fragments. At runtime, the app reconstructs the authorization key internally before sending requests to the AI server.
+
+The temporary encoding tool is not included in the submitted project, and the real API key is not written in the README, logs, screenshots, or documentation.
+
+### 5.2 API Key Obfuscation
+
+Implemented in:
+
+```text
+NativeKeyStore.java
+native-key.c
+```
+
+Protection measures include:
+
+- Splitting the key material into several fragments.
+- Reordering and reconstructing the fragments at runtime.
+- Applying a reverse transformation before native validation.
+- Using a native library to participate in key validation.
+- Including decoy strings to make static analysis less straightforward.
+
+### 5.3 Native Layer Protection
+
+The project includes compiled native libraries:
+
+```text
+app/src/main/jniLibs/arm64-v8a/libnative-key.so
+app/src/main/jniLibs/armeabi-v7a/libnative-key.so
+app/src/main/jniLibs/x86_64/libnative-key.so
+```
+
+Moving part of the key-handling logic into native code increases the effort required for reverse engineering compared with storing all logic only in Java bytecode.
+
+### 5.4 SSL Certificate Pinning
+
+Implemented in:
+
+```text
+SecurityConfig.java
+```
+
+The release build uses OkHttp `CertificatePinner` to pin the server certificate/public key and reduce the risk of man-in-the-middle attacks.
+
+Current pin value used in the code:
+
+```text
+sha256/JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=
+```
+
+Debug builds relax pinning to support emulator testing and development.
+
+### 5.5 Runtime Protection
+
+Implemented in:
+
+```text
+RuntimeGuard.java
+RootDetector.java
+MainActivity.java
+```
+
+The app checks for:
+
+- Debugger attachment.
+- Suspicious `TracerPid` values.
+- Frida-related ports and memory-map traces.
+- Suspicious packages.
+- Root and Magisk-related indicators.
+- Xposed/Substrate-related indicators.
+
+In release builds, suspicious runtime conditions can block sensitive operations.
+
+### 5.6 R8 / ProGuard Hardening
+
+Release builds enable shrinking and obfuscation:
+
+```gradle
+release {
+    minifyEnabled true
+    shrinkResources true
+    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+}
+```
+
+The project uses Android's built-in R8/ProGuard configuration. No commercial obfuscator is used.
+
+R8 helps with:
+
+- Removing unused code.
+- Obfuscating class, method, and field names.
+- Reducing APK size.
+- Removing selected logging calls in release builds according to `proguard-rules.pro`.
+
+R8 does not provide absolute string encryption, so the app also uses custom key splitting and native-layer validation.
+
+### 5.7 Network Security Configuration
+
+Implemented in:
+
+```text
+AndroidManifest.xml
+res/xml/network_security_config.xml
+```
+
+The app disables cleartext HTTP traffic:
+
+```xml
+android:usesCleartextTraffic="false"
+```
+
+The network security configuration also sets `cleartextTrafficPermitted="false"`.
+
+### 5.8 Backup and Data Extraction Restrictions
+
+Implemented in:
+
+```text
+AndroidManifest.xml
+res/xml/data_extraction_rules.xml
+```
+
+The manifest disables app backup:
+
+```xml
+android:allowBackup="false"
+android:fullBackupContent="false"
+```
+
+This reduces the risk of sensitive app data being extracted through Android backup mechanisms.
+
+---
+
+## 6. Build Instructions
+
+### Requirements
+
+- Android Studio
+- Android Gradle Plugin compatible with the project configuration
+- Android SDK 34
+- Minimum SDK: 24
+- Java 8 compatibility
+
+### Debug Build
+
+```bash
+./gradlew assembleDebug
+```
+
+### Release Build
+
+```bash
+./gradlew assembleRelease
+```
+
+The generated APK can usually be found under:
+
+```text
+app/build/outputs/apk/release/
+```
+
+---
+
+## 7. Open-Source Obfuscator Declaration
+
+This project uses the following free and open-source Android tooling:
+
+| Tool | Purpose | License/Status |
+|---|---|---|
+| R8 / ProGuard | Code shrinking, optimization, and obfuscation | Built into Android Gradle Plugin / open-source Android toolchain |
+
+No commercial obfuscator is used.
+
+---
+
+## 8. Known Limitations
+
+- Client-side API key protection cannot provide perfect secrecy against a determined attacker.
+- Runtime detection can be bypassed by advanced attackers.
+- Certificate pinning can break if the server certificate or public key changes, so the pin should be checked before final release.
+- Debug builds are less strict than release builds to support development and emulator testing.
+- The cancel and save flows should be tested again after final code changes.
+
+---
+
+## 9. Academic Integrity Notes
+
+- The app communicates directly with the official AI server.
+- No third-party proxy server is used.
+- No DDoS or abusive server testing is performed.
+- The API key must not be shared with other groups.
+- The public test key must not be used in the submitted version.
+
+---
+
+## 10. Related Links
 - GitHub Repo：https://github.com/kndhjk/AIImageGenerator
 - Release APK：https://github.com/kndhjk/AIImageGenerator/releases/tag/v1.0.1
-- 个人技术笔记：https://github.com/kndhjk/openclaw-termux-install-notes
+- Technical Notes：https://github.com/kndhjk/openclaw-termux-install-notes

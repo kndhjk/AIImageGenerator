@@ -95,10 +95,11 @@
 }
 
 # =============================================================================
-# SECURITY CLASSES — MAXIMUM PROTECTION
+# SECURITY-RELATED CLASSES
 # =============================================================================
-# These classes are critical for API key protection.
-# We keep names, critical method signatures, and key obfuscation strings.
+# These classes are used for API key reconstruction, runtime checks,
+# root detection, and network security configuration.
+# Required members are kept to avoid breaking runtime behavior.
 
 -keep class com.cs702.aigenerator.NativeKeyStore { *; }
 -keep class com.cs702.aigenerator.SecurityConfig { *; }
@@ -114,7 +115,6 @@
     private static final java.lang.String _segD;
     private static final java.lang.String _fake1;
     private static final java.lang.String _fake2;
-    private static final int VALIDATE_CHAR;
     public static java.lang.String getApiKey();
     public static java.lang.String getApiKey(android.content.Context);
     public static java.lang.String getFakeApiKey();

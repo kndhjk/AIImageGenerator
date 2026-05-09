@@ -59,10 +59,10 @@ public class NativeKeyStore {
 ### 步骤 4 — Python 提取 API Key
 ```python
 # _rev 是翻转后的十六进制字符串，直接翻转回来即可
-_rev = "<redacted-sample-blob>"
+_rev = "<redacted encoded public test key fragments>"
 api_key = _rev[::-1]  # Python 翻转字符串
 print(api_key)
-# 输出：<redacted-sample-api-key>
+# 输出：The extracted value matched the public test key provided in the assignment brief. The actual key is redacted here.
 ```
 
 **难度**：★☆☆☆☆（`_rev` 就是翻转后的字符串，任何会 Python 的人 5 分钟内都能提取）

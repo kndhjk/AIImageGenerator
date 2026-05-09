@@ -15,16 +15,15 @@ import java.nio.charset.StandardCharsets;
 public class NativeKeyStore {
 
     // Original encoded blob is split and reordered to reduce easy recovery from one field.
-    private static final String _segB = "<redacted-seg-b>";
-    private static final String _segD = "<redacted-seg-d>";
-    private static final String _segA = "<redacted-seg-a>";
-    private static final String _segC = "<redacted-seg-c>";
+    private static final String _segB = "e92fccb4fb0f68ed6ca2e67564ee26f2";
+    private static final String _segD = "7f1e8eec832fc3fb0a27b06340dbe427";
+    private static final String _segA = "1d690d9f2653883fe942eb3faa031beb";
+    private static final String _segC = "cd7d4b71faf22415e403a2cff905155a";
 
     // Decoys — never used for the real key.
     private static final String _fake1 = "YTliM2IxYzMtNDUxNi00ZTk5LWFmYmItZDNjMzk0ZjUwNjAz";
     private static final String _fake2 = "ZWUwYzc5ZDAtYTIzMy00YTU5LThmZjMtYTMyZDM4YmQ3ZjMx";
 
-    private static final int VALIDATE_CHAR = 'c';
     private static final String EXPECTED_PACKAGE = "com.cs702.aigenerator";
 
     private static boolean nativeLoaded = false;
@@ -91,11 +90,19 @@ public class NativeKeyStore {
     }
 
     public static boolean isKeyValid(String key) {
-        if (key == null || key.length() < 64) return false;
-        if (nativeLoaded) {
-            return verifyNative(key) == 1;
+    if (key == null || key.length() != 128) return false;
+
+    for (int i = 0; i < key.length(); i++) {
+        char c = key.charAt(i);
+        boolean isHex =
+                (c >= '0' && c <= '9') ||
+                (c >= 'a' && c <= 'f');
+
+        if (!isHex) {
+            return false;
         }
-        return key.charAt(0) == VALIDATE_CHAR;
+    }
+        return true;
     }
 
     public static String getAuthHeaderName() {
