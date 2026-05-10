@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     private ApiService apiService;
     private Call<?> currentCall;
+    private volatile boolean requestCancelled = false;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private Bitmap lastGeneratedBitmap;
     private String lastGeneratedImageUrl;
@@ -169,6 +170,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        requestCancelled = false;
+        currentCall = null;
+
         Log.d(TAG, "generateImage: showing loading");
         showLoading(true);
         binding.placeholderContainer.setVisibility(View.GONE);
@@ -176,9 +180,16 @@ public class MainActivity extends AppCompatActivity {
 
         Log.d(TAG, "generateImage: calling apiService.auth()");
         // Step 1: Authenticate with API key
-        apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
+         Call<AuthResponse> authCall = apiService.auth(apiKey);
+        currentCall = authCall;
+    
+        authCall.enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
+                if (requestCancelled || call.isCanceled()) {
+                    return;
+                }
+
                 Log.d(TAG, "auth onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
                 if (!response.isSuccessful() || response.body() == null) {
                     Log.d(TAG, "auth failed: " + response.code());
@@ -195,11 +206,22 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 // Step 2: Generate image with signature from auth
+                if (requestCancelled || call.isCanceled()) {
+                    return;
+                }
+
                 GenerateRequest request = new GenerateRequest(signature, prompt);
                 Log.d(TAG, "generateImage: calling apiService.generateImage()");
-                apiService.generateImage(apiKey, request).enqueue(new Callback<ResponseBody>() {
+                Call<ResponseBody> genCall = apiService.generateImage(apiKey, request);
+                currentCall = genCall;
+
+                genCall.enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                        if (requestCancelled || call.isCanceled()) {
+                            return;
+                        }
+
                         Log.d(TAG, "generate onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
                         if (!response.isSuccessful() || response.body() == null) {
                             onError(getString(R.string.error_generation));
@@ -230,9 +252,12 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(Call<ResponseBody> call, Throwable t) {
                         Log.d(TAG, "generate onFailure: " + t.getMessage());
-                        if (!call.isCanceled()) {
-                            onError(getString(R.string.error_network));
+                        if (requestCancelled || call.isCanceled()) {
+                            return;
                         }
+
+                        currentCall = null;
+                        onError(getString(R.string.error_network));
                     }
                 });
             }
@@ -240,9 +265,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
                 Log.d(TAG, "auth onFailure: " + t.getMessage());
-                if (!call.isCanceled()) {
-                    onError(getString(R.string.error_network));
+                if (requestCancelled || call.isCanceled()) {
+                    return;
                 }
+
+                currentCall = null;
+                onError(getString(R.string.error_network));
             }
         });
     }
@@ -287,17 +315,23 @@ public class MainActivity extends AppCompatActivity {
 
     private void onError(String message) {
         Log.d(TAG, "onError: " + message);
+        currentCall = null;
         showLoading(false);
         binding.placeholderContainer.setVisibility(View.VISIBLE);
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
     private void cancelRequest() {
-        if (currentCall != null) {
+        requestCancelled = true;
+
+        if (currentCall != null && !currentCall.isCanceled()) {
             currentCall.cancel();
         }
+
+        currentCall = null;
         showLoading(false);
         binding.placeholderContainer.setVisibility(View.VISIBLE);
+        Toast.makeText(this, "Request cancelled", Toast.LENGTH_SHORT).show();
     }
 
     private void checkPermissionAndSave() {
@@ -349,6 +383,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (currentCall != null && !currentCall.isCanceled()) {
+            currentCall.cancel();
+        }
         super.onDestroy();
         executor.shutdown();
     }
