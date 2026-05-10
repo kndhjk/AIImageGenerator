@@ -336,8 +336,3 @@ No commercial obfuscator is used.
 - The public test key must not be used in the submitted version.
 
 ---
-
-## 10. Related Links
-- GitHub Repo：https://github.com/kndhjk/AIImageGenerator
-- Release APK：https://github.com/kndhjk/AIImageGenerator/releases/tag/v1.0.1
-- Technical Notes：https://github.com/kndhjk/openclaw-termux-install-notes

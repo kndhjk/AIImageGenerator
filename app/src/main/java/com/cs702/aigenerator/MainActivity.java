@@ -279,25 +279,34 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "showImage: " + imageUrl);
         showLoading(false);
 
+        lastGeneratedBitmap = null;
+        binding.btnSave.setEnabled(false);
+
         Glide.with(this)
                 .load(imageUrl)
                 .into(binding.ivImage);
-
-        binding.btnSave.setEnabled(true);
 
         // Download bitmap in background for saving
         executor.execute(() -> {
             try {
                 okhttp3.Request request = new okhttp3.Request.Builder().url(imageUrl).build();
-                okhttp3.Response response = new OkHttpClient().newCall(request).execute();
-                if (response.isSuccessful() && response.body() != null) {
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                    lastGeneratedBitmap = BitmapFactory.decodeStream(
-                            response.body().byteStream(), null, options);
+                try (okhttp3.Response response = new OkHttpClient().newCall(request).execute()) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        BitmapFactory.Options options = new BitmapFactory.Options();
+                        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+
+                        Bitmap bitmap = BitmapFactory.decodeStream(
+                                response.body().byteStream(), null, options);
+
+                        if (bitmap != null) {
+                            lastGeneratedBitmap = bitmap;
+                            runOnUiThread(() -> binding.btnSave.setEnabled(true));
+                        }
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
+                runOnUiThread(() -> binding.btnSave.setEnabled(false));
             }
         });
     }
@@ -349,7 +358,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void saveImageToGallery() {
         if (lastGeneratedBitmap == null) {
-            Toast.makeText(this, R.string.error_save, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.error_save_not_ready, Toast.LENGTH_SHORT).show();
             return;
         }
 

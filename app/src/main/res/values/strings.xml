@@ -14,4 +14,5 @@
     <string name="error_network">Network error. Check your connection.</string>
     <string name="error_save">Failed to save image</string>
     <string name="success_saved">Image saved to gallery! 🎉</string>
+    <string name="error_save_not_ready">The image is still loading. Please try again in a moment.</string>
 </resources>
