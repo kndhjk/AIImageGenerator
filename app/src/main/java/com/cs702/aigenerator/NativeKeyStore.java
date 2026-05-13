@@ -54,16 +54,7 @@ public class NativeKeyStore {
     private static final String FAKE_1 = "YTliM2IxYzMtNDUxNi00ZTk5LWFmYmItZDNjMzk0ZjUwNjAz";
     private static final String FAKE_2 = "ZWUwYzc5ZDAtYTIzMy00YTU5LThmZjMtYTMyZDM4YmQ3ZjMx";
 
-    private static boolean nativeLoaded = false;
-
-    static {
-        try {
-            System.loadLibrary("native-key");
-            nativeLoaded = true;
-        } catch (UnsatisfiedLinkError e) {
-            nativeLoaded = false;
-        }
-    }
+    private static final boolean nativeLoaded = false;
 
     public static String getApiKey() {
         return "";
