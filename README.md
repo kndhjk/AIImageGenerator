@@ -336,3 +336,7 @@ No commercial obfuscator is used.
 - The public test key must not be used in the submitted version.
 
 ---
+
+## 10. 可以加强地方
+
+删除敏感 log、让所有网络请求都走 pinned OkHttpClient、加入 release 签名校验、加入 key hash integrity check、加强 ProGuard 不要 keep 整个安全类
