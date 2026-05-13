@@ -13,5 +13,7 @@
     <string name="error_generation">Generation failed. Please try again.</string>
     <string name="error_network">Network error. Check your connection.</string>
     <string name="error_save">Failed to save image</string>
+    <string name="error_key_config">Security error: invalid API key configuration</string>
+    <string name="error_remote_fragment">Security handshake failed. Please try again.</string>
     <string name="success_saved">Image saved to gallery! 🎉</string>
 </resources>

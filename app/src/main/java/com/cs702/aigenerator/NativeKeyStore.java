@@ -26,21 +26,21 @@ public class NativeKeyStore {
 
     // Reversed ciphertext+tag, split into uneven chunks to avoid a single obvious blob.
     private static final String[] CIPHER_SEGMENTS = {
-        "e6eee143aea77c44cb829198dbe4ea1d2601690a",
-        "fdf14ce2824a54153176cdd4181863c90c0a43cb",
-        "a05b1603f69b519e358cd68b2c4ef478059b42f9",
-        "84e6122e47473ccc7164031c978b1a05082b9403",
-        "492a6224cb2755b430dd66be7f96188c61a223df",
-        "ef755db8b9220f926995ef3862da66903c731282",
-        "78da12e5fbeaaad7316a030bc1b960b72ef472ef",
-        "c3d500f2"
+        "66b937c3ae119c733e48088a6ed53a555fc94c5d",
+        "70ce817d27ccad0d4538d022a071358e1b0389b2",
+        "305f4ab165f617facccc237bbc0305941901acab",
+        "3b5a50e887cdfa0f1ed0b4ec198910a928cb6f43",
+        "d55c58cfbef6f94f6aab93950aa179d403fc26cc",
+        "90206d446725d9599327cdc0cda0f45eb464f0b7",
+        "abe60c77f442267485a6758afa52dae286b3e796",
+        "78c1f2c7"
     };
 
     // Reversed IV, also split.
     private static final String[] IV_SEGMENTS = {
-        "7db7d675",
-        "5df02bab",
-        "536bae88"
+        "6631f9dd",
+        "933794d8",
+        "2d0ba2f8"
     };
 
     // Seed fragments (runtime order differs from source order).
@@ -66,26 +66,26 @@ public class NativeKeyStore {
     }
 
     public static String getApiKey() {
-        try {
-            return decryptStoredKey();
-        } catch (Exception e) {
-            return "";
-        }
+        return "";
     }
 
     public static String getApiKey(Context context) {
-        if (context == null) return getApiKey();
+        if (context == null) return "";
         if (!EXPECTED_PACKAGE.equals(context.getPackageName())) {
             return "";
         }
         if (RuntimeGuard.shouldBlockSensitiveOps(context)) {
             return "";
         }
-        return getApiKey();
+        try {
+            return decryptStoredKey(context);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
-    private static String decryptStoredKey() throws Exception {
-        byte[] aesKey = deriveAesKey();
+    private static String decryptStoredKey(Context context) throws Exception {
+        byte[] aesKey = deriveAesKey(context);
         byte[] iv = hexToBytes(reverse(join(IV_SEGMENTS)));
         byte[] cipherBlob = hexToBytes(reverse(join(CIPHER_SEGMENTS)));
 
@@ -98,8 +98,12 @@ public class NativeKeyStore {
         return new String(plain, StandardCharsets.UTF_8);
     }
 
-    private static byte[] deriveAesKey() throws Exception {
-        String seed = PART_C + "#" + PART_A + "@" + PART_E + "!" + PART_B + "$" + PART_D + "%" + EXPECTED_PACKAGE;
+    private static byte[] deriveAesKey(Context context) throws Exception {
+        String remoteFragment = context != null ? RemoteKeyProvider.getCachedFragment(context) : "";
+        if (remoteFragment == null || remoteFragment.isEmpty()) {
+            throw new IllegalStateException("missing remote fragment");
+        }
+        String seed = PART_C + "#" + PART_A + "@" + PART_E + "!" + PART_B + "$" + PART_D + "%" + EXPECTED_PACKAGE + "|" + remoteFragment;
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         return digest.digest(seed.getBytes(StandardCharsets.UTF_8));
     }

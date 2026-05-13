@@ -153,27 +153,42 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // FORTIFY: Get API key from obfuscated storage
         if (RuntimeGuard.shouldBlockSensitiveOps(getApplicationContext())) {
             onError("Security policy blocked this request on the current device");
             return;
         }
 
-        String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
-        Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
-        Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isKeyValid(apiKey));
-
-        if (!NativeKeyStore.isKeyValid(apiKey)) {
-            Log.d(TAG, "generateImage: invalid key");
-            Toast.makeText(this, "Security error: invalid API key configuration", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        Log.d(TAG, "generateImage: showing loading");
         showLoading(true);
         binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
+        RemoteKeyProvider.ensureFragment(getApplicationContext(), new RemoteKeyProvider.Callback() {
+            @Override
+            public void onSuccess(String fragment) {
+                String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
+                Log.d(TAG, "generateImage: remote fragment ok len=" + (fragment != null ? fragment.length() : 0));
+                Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
+                Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isKeyValid(apiKey));
+
+                if (!NativeKeyStore.isKeyValid(apiKey)) {
+                    Log.d(TAG, "generateImage: invalid key");
+                    showLoading(false);
+                    Toast.makeText(MainActivity.this, R.string.error_key_config, Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                startGeneration(prompt, apiKey);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                showLoading(false);
+                Toast.makeText(MainActivity.this, R.string.error_remote_fragment, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void startGeneration(String prompt, String apiKey) {
         Log.d(TAG, "generateImage: calling apiService.auth()");
         // Step 1: Authenticate with API key
         apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
