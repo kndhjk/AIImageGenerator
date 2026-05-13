@@ -4,6 +4,16 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to create/update when run manually"
+        required: false
+      release_name:
+        description: "Release title when run manually"
+        required: false
+      release_notes:
+        description: "Optional release notes for manual runs"
+        required: false
 
 permissions:
   contents: write
@@ -11,6 +21,10 @@ permissions:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'release' && github.ref_name || inputs.tag_name || format('manual-build-{0}', github.run_number) }}
+      RELEASE_NAME: ${{ github.event_name == 'release' && github.event.release.name || inputs.release_name || format('Manual Build {0}', github.run_number) }}
+      RELEASE_NOTES: ${{ inputs.release_notes || format('Automated APK build from workflow run {0}.', github.run_number) }}
 
     steps:
       - name: Checkout
@@ -35,9 +49,12 @@ jobs:
         run: cp app/build/outputs/apk/debug/app-debug.apk AIImageGenerator-debug.apk
 
       - name: Upload APK to GitHub Release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          body: ${{ env.RELEASE_NOTES }}
           files: AIImageGenerator-debug.apk
           fail_on_unmatched_files: true
 
