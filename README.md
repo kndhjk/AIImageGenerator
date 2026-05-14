@@ -4,88 +4,31 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 ---
 
-## 📦 当前版本 v1.0.3
+## 📦 当前版本 v1.1.0
 
-**APK 大小**：约 6.3 MB（当前 debug artifact）
+**APK 大小**：约 6 MB（含 3 架构 Native .so 库）
 
-**最后更新**：2026-05-13
+**最后更新**：2026-05-15
 
-**签名**：debug keystore（提交用）；当前主线已完成 Windows / Android Studio 编译与模拟器运行验证
+**签名**：debug keystore（提交用），`minifyEnabled = false`（release）
 
-**当前主线提交**：`2483608` — `fix: remove obsolete native libs causing 16kb warning`
+**MD5**：`c16a4aafd756ed04b8de94f6a3a9a3fb`
 
-**关键安全提交**：`fcaafcf` — `security: require remote fragment for api key release flow`
-
-**GitHub 在线打包**：
-- Workflow：`Release APK`
-- Run：`25783372526`
-- Artifact：`AIImageGenerator-debug-apk`
-- Artifact ID：`6963473196`
-- SHA-256：`f053aa81a27702fc4161930c6945893c8e50e2d60fa0901994723b398e570d3f`
-
-**下载地址**：
-- 历史 Release：https://github.com/kndhjk/AIImageGenerator/releases/tag/v1.0.1
-- 最新在线构建产物：GitHub Actions `Release APK` run `25783372526`
-
-> 说明：旧版本 README 中关于 “含 3 架构 Native .so 库” 的描述已不再适用于当前主线。2026-05-13 版本已移除过时 JNI `.so`，当前实际保护链依赖 `AES-GCM + remote fragment`。
+**下载地址**：发布后见 GitHub Releases
 
 ---
 
 ## 🛠️ 开发日志
 
-### 2026-05-13 — Remote Fragment 双层放钥 + 在线打包 + Windows/Android Studio 验证
+### 2026-05-15 — 本地-only key 重构
 
-**问题 12：旧的本地可逆 key 保护强度不足，需要继续加固**
-
-新增：
-- `RemoteKeyProvider.java`
-- 运行时先请求远端 fragment：`http://4.155.227.179/api/aig/fragment?v=1`
-- 请求头要求：`X-App-Id: com.cs702.aigenerator`
-- `NativeKeyStore.java` 现在必须拿到缓存的 remote fragment，才能导出最终 API key
-- `MainActivity.java` 在点击 Generate 后，先 `ensureFragment(...)`，拿不到 fragment 或 key 校验失败则直接停止
-
-后端配套：
-- 复用现有服务器接口提供 fragment，避免另起服务破坏既有网站
-- 线上接口已验证可返回 `{ version: 1, fragment: ... }`
-
-提交：
-- `fcaafcf` — `security: require remote fragment for api key release flow`
-
-**问题 13：16KB page-size 模拟器兼容提示**
-
-排查：
-- `Medium_Phone_API_36` 模拟器会弹 “This app isn’t 16 KB compatible”
-- 旧版 APK 内含 `app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64}/libnative-key.so`
-- 但当前真实 key 释放流程已经不再依赖这些旧 JNI `.so`
-
-修复：
-- 删除过时 JNI `.so`
-- 将 `NativeKeyStore` 中 `System.loadLibrary("native-key")` 相关逻辑退场
-- 保留当前真实保护链：`AES-GCM + remote fragment`
-
-结果：
-- `Android CI` 成功
-- 最新 GitHub 在线打包 `Release APK` 成功
-- Windows 的 Android Studio 环境重新拉取、编译、安装成功
-- `VaultDevice` 模拟器成功进入主界面
-- `Medium_Phone_API_36` 的 16KB 提示更像 AVD/系统检查行为，而不是当前 APK 中仍残留 `.so`
-
-提交：
-- `2483608` — `fix: remove obsolete native libs causing 16kb warning`
-
-**Windows / Android Studio 实测结果**
-- 机器：`zyzmc@192.168.31.98`
-- Android Studio 路径：`C:\Program Files\Android\Android Studio`
-- 成功编译 APK：`C:\Users\zyzmc\AIImageGenerator\app\build\outputs\apk\debug\app-debug.apk`
-- `VaultDevice` 模拟器已验证主界面可正常显示：
-  - `✨ AI Image Generator`
-  - `Turn your words into stunning visuals`
-  - `Describe your image...`
-  - `Generate`
-  - `Save`
-
-> 注：以下 2026-05-03 及更早内容保留为历史开发记录，不删除。
-
+- 去掉旧的 Java 侧翻转 key 方案
+- 去掉旧的预编译 `jniLibs/*.so`，改为 Gradle + CMake 现场构建 JNI
+- API key 改成 **仅存于 C 层**
+- 新增自定义“类摩斯码”编码（`di / da / tu / ka`）
+- 8 组分片乱序存储 + 位置相关 rolling mask + 位旋转还原
+- Native checksum 校验：只接受唯一目标 key，其他值直接拒绝
+- GitHub Actions 已补上 NDK + CMake 安装
 
 ### 2026-05-03 — Part 2 完成 + 生图最终修复
 
@@ -144,18 +87,18 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 1  │  bytecode：翻转 128 hex string `_rev`           │
-│  Layer 2  │  System.loadLibrary("native-key") 加载 .so       │
-│  Layer 3  │  手动 char[] reverse（不用 StringBuilder JNI）   │
-│  Layer 4  │  VALIDATE_CHAR='c' 运行时校验                   │
-│  Layer 5  │  JNI verifyNative() native 层格式校验           │
-│  Layer 6  │  clearKeyMemory() native 安全擦除               │
-│  Layer 7  │  诱饵方法 getFakeApiKey() / isKeyValid()        │
+│  Layer 1  │  key 仅存于 C/JNI，不在 Java 明文出现            │
+│  Layer 2  │  自定义类摩斯码编码（di / da / tu / ka）         │
+│  Layer 3  │  8 组分片乱序存储                                │
+│  Layer 4  │  rolling mask（按字符位置变化）                  │
+│  Layer 5  │  位旋转还原（bit rotation）                      │
+│  Layer 6  │  JNI verifyNative() + FNV-1a checksum 校验      │
+│  Layer 7  │  native 临时缓冲区安全擦除                       │
 │  Layer 8  │  ProGuard：删除所有 Log + 代码混淆               │
 │  Layer 9  │  android:fullBackupContent="false"             │
-│  Layer 10 │  Frida 检测（agent文件/proc maps/fd/端口/cmd） │
-│  Layer 11 │  调试器检测 + APK 签名校验                       │
-│  Layer 12 │  RootDetector 14 项检测（含 Magisk/Zygisk）    │
+│  Layer 10 │  Frida 检测（maps/TracerPid/端口/包名）         │
+│  Layer 11 │  调试器检测 + suspicious runtime blocking        │
+│  Layer 12 │  RootDetector 14 项检测（含 Magisk/Zygisk）     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -193,7 +136,7 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 | 攻击面 | 难度 | 说明 |
 |--------|------|------|
-| Java 反编译 | ★★★★☆ | `_rev` 可见但需手动反转，诱饵方法干扰 |
+| Java 反编译 | ★★★★☆ | Java 层看不到真实 key，只能看到 JNI 入口 |
 | Frida Hook | ★★★★☆ | 5 种检测方法，部分阻断调试 |
 | Native 反汇编 | ★★★☆☆ | .so 仅含简单 reverse 操作 |
 | 网络抓包 | ★★★★★ | SSL Pinning 防止 MITM |
@@ -212,7 +155,7 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 | 3 | isValidKey 一直失败 | key 包含大写字符，正则只接受小写 | 改为 `^[a-fA-F0-9]{88}$` |
 | 4 | 编译错误：CertificatePinner 重复 | 同时 import 了两个不同版本的类 | 只保留 okhttp3 版本 |
 | 5 | 构建失败 | `tools:targetApi` 位置错误 | 只保留在 `<manifest>` 标签 |
-| 6 | API key 解码后损坏 | XOR+Base64 多字节字符被当 UTF-8 转换 | 改用纯字符串反转（ASCII 安全） |
+| 6 | API key 解码后损坏 | 早期字符串方案容易出错 | 迁移到 native-only 自定义编码 |
 | 7 | SSL Pinning Release 失败 | Pin 用了完整证书 DER SHA-256，而非 SPKI hash | 用 OpenSSL 提取正确 SPKI hash |
 | 8 | Release 所有请求超时 | R8/ProGuard 破坏了 OkHttp 内部反射调用链 | `minifyEnabled = false` |
 | 9 | 模拟器 HTTPS 超时 | DNS 同时返回 IPv4+IPv6，IPv6 路由不通 | 启动加 `-dns-server 8.8.8.8` |
@@ -222,7 +165,7 @@ Android app for CS702 — Build & Fortify assignment. Generates AI images from t
 
 ## ⚠️ 已知限制 / 待办
 
-1. **Placeholder API Key**：`NativeKeyStore.java` 中的 key 是课程占位符，提交前需替换为真实的 Canvas Authorization header
+1. **客户端密钥永远不是绝对安全的**：当前实现是高强度加固，不是数学意义上的不可提取
 2. **CS702 Part 3 Attack**：尚未开始
 3. **提交前任务清单**：见 [`SUBMISSION_TODO_2026-05-06_zh.md`](./SUBMISSION_TODO_2026-05-06_zh.md)
 
@@ -257,5 +200,5 @@ AIImageGenerator/
 ## 🔗 相关链接
 
 - GitHub Repo：https://github.com/kndhjk/AIImageGenerator
-- Release APK：https://github.com/kndhjk/AIImageGenerator/releases/tag/v1.0.1
+- Release APK：发布后见 GitHub Releases
 - 个人技术笔记：https://github.com/kndhjk/openclaw-termux-install-notes

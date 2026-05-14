@@ -108,17 +108,12 @@
 
 # Keep ALL private static fields in NativeKeyStore (critical for key protection)
 -keepclassmembers class com.cs702.aigenerator.NativeKeyStore {
-    private static final java.lang.String _segA;
-    private static final java.lang.String _segB;
-    private static final java.lang.String _segC;
-    private static final java.lang.String _segD;
-    private static final java.lang.String _fake1;
-    private static final java.lang.String _fake2;
-    private static final int VALIDATE_CHAR;
+    private static final int REQUIRED_LENGTH;
+    private static final java.lang.String EXPECTED_PACKAGE;
     public static java.lang.String getApiKey();
     public static java.lang.String getApiKey(android.content.Context);
-    public static java.lang.String getFakeApiKey();
     public static boolean isKeyValid(java.lang.String);
+    public static java.lang.String getAuthHeaderName();
 }
 
 

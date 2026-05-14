@@ -21,36 +21,37 @@ Without pinning, a man-in-the-middle (MITM) attacker could intercept HTTPS traff
 
 ---
 
-## 2. API Key Protection (Vault-style Layering)
+## 2. API Key Protection (Native-only Layering)
 
 ### Implementation
-The API authorization key is NOT stored as a plaintext string in Java. The current implementation uses a layered design inspired by the Vault challenge style:
+The API authorization key is NOT stored as a plaintext string in Java. The current implementation uses a layered native-only design:
 
-1. **Fragmented storage**: the encoded key blob is split across `_segA/_segB/_segC/_segD`
-2. **Reordered assembly**: the final blob is reconstructed at runtime instead of appearing as one obvious constant
-3. **Reverse transform**: the assembled blob is reversed in Java
-4. **Native reconstruction**: `libnative-key.so` performs the final transformation via shuffle-table + XOR logic
-5. **Decoys**: fake key accessors remain to waste analyst time
+1. **Native-only storage**: the real key lives only in `native-key.c`
+2. **Custom symbol encoding**: each character is encoded with an invented Morse-like syllable alphabet (`di/da/tu/ka`)
+3. **Group shuffling**: encoded chunks are split into 8 groups and reconstructed in non-source order
+4. **Rolling byte transform**: each character is protected with a position-dependent byte mask and bit rotation
+5. **Native validation**: JNI verifies lowercase-hex format and a fixed FNV-1a checksum before returning the key
 6. **Release guardrails**: release builds refuse to return the key if runtime hook/tamper signals are present
 
 ### Why This Matters
 This does **not** make extraction impossible, but it raises the cost materially:
-- there is no single plaintext key string in DEX
-- static analysis must recover the fragment order first
-- then understand the reverse step
-- then reverse the native transformation logic
+- there is no plaintext key string in DEX
+- the old Java reversal method is gone
+- the old prebuilt `.so` files are gone
+- analysis must recover the custom syllable mapping, group order, rolling transform, and checksum rules
 - and in release builds, the key path is blocked when obvious instrumentation is detected
 
 ### Code Reference
-- `NativeKeyStore.java` - `getApiKey(Context)`, `getEncodedBlob()`, `isKeyValid()`
-- `native-key.c` - `getNativeKey()` and `verifyNative()`
+- `NativeKeyStore.java` - `getApiKey(Context)`, `isKeyValid()`
+- `native-key.c` - `buildNativeKey()` and `verifyNative()`
 
 ### Code Flow
 ```
-segA + segB + segC + segD
-→ reverse in Java
-→ native unshuffle + XOR undo
-→ validate
+native encoded groups
+→ unshuffle by group index
+→ decode custom di/da/tu/ka symbols
+→ undo rolling rotate+mask transform
+→ native checksum validate
 → API key
 ```
 
@@ -167,12 +168,12 @@ This prevents `adb install -r` from attaching debuggers to the release APK, maki
 | Attack Vector | Protection | Effectiveness |
 |---------------|-----------|---------------|
 | MITM with forged cert | Certificate Pinning | ★★★★★ |
-| APK decompilation | XOR+Base64 obfuscation | ★★★☆☆ |
+| APK decompilation | Native custom symbol encoding + rolling transform | ★★★★☆ |
 | Root/Jailbreak detection | RootDetector checks | ★★★★☆ |
 | Dynamic analysis (Frida/Xposed) | RuntimeGuard + root/hooking checks + release blocking | ★★★★☆ |
 | Debugger attachment | Debug flags disabled | ★★★☆☆ |
 | Network traffic interception | SSL Pinning + no HTTP | ★★★★★ |
-| API key extraction from strings | String obfuscation | ★★★☆☆ |
+| API key extraction from strings | Native-only storage | ★★★★☆ |
 
 ---
 
@@ -193,7 +194,7 @@ This prevents `adb install -r` from attaching debuggers to the release APK, maki
 | File | Purpose |
 |------|---------|
 | `SecurityConfig.java` | SSL Certificate Pinning configuration |
-| `NativeKeyStore.java` | XOR+Base64 obfuscated API key storage |
+| `NativeKeyStore.java` | Native-only API key access |
 | `RootDetector.java` | Root / Magisk / dangerous package detection |
 | `RuntimeGuard.java` | Anti-debug / anti-Frida / runtime instrumentation checks |
 | `ApiClient.java` | Hardened OkHttpClient with pinning |
@@ -223,4 +224,4 @@ To test RuntimeGuard:
 To verify obfuscation:
 1. Use `apktool d` or jadx on a release APK
 2. Search for the API key string - it should NOT appear in plaintext
-3. Inspect `NativeKeyStore` and confirm the key blob is fragmented rather than stored as a single constant
+3. Inspect `NativeKeyStore` and confirm the real key is not present as a Java string constant

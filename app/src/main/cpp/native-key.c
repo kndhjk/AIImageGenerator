@@ -1,159 +1,272 @@
-/*
- * native-key.c - Native key decoding layer for CS702 Fortify
- *
- * This compiled native library provides an additional security layer:
- * Key transformation constants (XOR seed, shuffle table) are invisible in
- * Java decompilation — only visible in compiled ARM/x86 machine code.
- *
- * Protection layers:
- *   Java:    reversed hex string in bytecode
- *   Native:  .so file holds XOR_SEED + SHUFFLE table (in ARM machine code)
- *             getNativeKey() applies byte-level unshuffle + XOR
- *             verifyNative() checks key format
- *
- * Attackers would need to:
- * (1) Find _rev string in bytecode
- * (2) Know it's reversed (Java layer)
- * (3) Load and reverse-engineer libnative-key.so (ARM disassembly)
- * (4) Extract SHUFFLE table + XOR_SEED from machine code
- * (5) Understand the unshuffle + XOR reconstruction
- */
-#include <string.h>
-#include <stdlib.h>
 #include <jni.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
-/* XOR seed — makes byte transformation non-trivial */
-#define XOR_SEED 0x5A
+#define KEY_LENGTH 128
+#define CHUNK_LENGTH 10
+#define GROUP_COUNT 8
+#define GROUP_SIZE 16
+#define EXPECTED_FNV64 0x61074e8225321d6bULL
 
-/* Shuffle table: byte written to OUTPUT[SHUFFLE[i]] from INPUT[i] */
-/* We invert this: to find original byte at position i, look at SHUFFLE[i] */
-static const unsigned char SHUFFLE[64] = {
-    63, 31, 59, 15, 55, 47, 51,  7, 43, 27, 39, 11, 35, 23, 19,  3,
-    62, 30, 58, 14, 54, 46, 50,  6, 42, 26, 38, 10, 34, 22, 18,  2,
-    61, 29, 57, 13, 53, 45, 49,  5, 41, 25, 37,  9, 33, 21, 17,  1,
-    60, 28, 56, 12, 52, 44, 48,  4, 40, 24, 36,  8, 32, 20, 16,  0
+static const char *GROUP_0[16] = {
+    "Qdikadadia",
+    "Wkakakakaf",
+    "Ekadikatuj",
+    "Rdaditukas",
+    "Tkakakakag",
+    "Ykadidatuk",
+    "Udatutukad",
+    "Ididatutuh",
+    "Qtukadikaa",
+    "Wtudadituf",
+    "Etudidadaj",
+    "Rtututukas",
+    "Ttukaditug",
+    "Ytutukadak",
+    "Udadakadad",
+    "Idadidadih",
 };
 
-/*
- * Apply native layer transformation to reconstruct the key.
- * The key (128 hex chars = 64 bytes) was encoded as:
- *   encoded[i] = original[SHUFFLE[i]] ^ (XOR_SEED + i)
- *
- * We invert this: for each output position i, find where it came from.
- */
-JNIEXPORT jstring JNICALL
-Java_com_cs702_aigenerator_NativeKeyStore_getNativeKey(
-    JNIEnv *env,
-    jobject obj,
-    jstring reversed_key)
-{
-    const char *rev = (*env)->GetStringUTFChars(env, reversed_key, NULL);
-    int len = (*env)->GetStringLength(env, reversed_key);
+static const char *GROUP_1[16] = {
+    "Qditutudia",
+    "Wtukadadaf",
+    "Edatudadaj",
+    "Rkatudatus",
+    "Tkakakadag",
+    "Ykakakakak",
+    "Udadikadid",
+    "Ikakadadah",
+    "Qdadadatua",
+    "Wdiditudaf",
+    "Edikatudij",
+    "Rtudididas",
+    "Ttudatukag",
+    "Ydiditudik",
+    "Uditudikad",
+    "Itukadituh",
+};
 
-    if (len != 128) {
-        (*env)->ReleaseStringUTFChars(env, reversed_key, rev);
-        return (*env)->NewStringUTF(env, "");
-    }
+static const char *GROUP_2[16] = {
+    "Qdadakatua",
+    "Wditudadaf",
+    "Ekatudatuj",
+    "Rtuditudas",
+    "Ttudadidig",
+    "Ykatudituk",
+    "Ukadididad",
+    "Ituditudih",
+    "Qdatutudia",
+    "Wdadidikaf",
+    "Edakatutuj",
+    "Rdatukadas",
+    "Ttutukatug",
+    "Ytudadadak",
+    "Uditukadad",
+    "Idatukadih",
+};
 
-    /* Process as hex string → byte array → transform → hex string */
-    unsigned char original_bytes[64];
-    unsigned char encoded_bytes[64];
+static const char *GROUP_3[16] = {
+    "Qdatutudia",
+    "Wdakatukaf",
+    "Editudituj",
+    "Rditudadas",
+    "Ttudidatug",
+    "Ykadadakak",
+    "Ututudatud",
+    "Itutukatuh",
+    "Qkakadakaa",
+    "Wdadadadif",
+    "Ekakadidaj",
+    "Rkakatudis",
+    "Ttututukag",
+    "Ydidadidik",
+    "Udituditud",
+    "Itutudikah",
+};
 
-    /* Parse hex string to bytes (2 chars per byte) */
-    for (int i = 0; i < 64; i++) {
-        char h1 = rev[i * 2];
-        char h2 = rev[i * 2 + 1];
-        int val = 0;
+static const char *GROUP_4[16] = {
+    "Qkadidadaa",
+    "Wdatudatuf",
+    "Ekadadatuj",
+    "Rkadidadas",
+    "Tdidakatug",
+    "Yditutudak",
+    "Udidadidid",
+    "Ididatukah",
+    "Qkadiditua",
+    "Wtukadituf",
+    "Edidadikaj",
+    "Rtukatutus",
+    "Ttutukadag",
+    "Ykadidadik",
+    "Ukakadakad",
+    "Ikakadatuh",
+};
 
-        if (h1 >= '0' && h1 <= '9') val = (h1 - '0') * 16;
-        else if (h1 >= 'a' && h1 <= 'f') val = (h1 - 'a' + 10) * 16;
-        else {
-            (*env)->ReleaseStringUTFChars(env, reversed_key, rev);
-            return (*env)->NewStringUTF(env, "");
-        }
+static const char *GROUP_5[16] = {
+    "Qdikadadia",
+    "Wkadididif",
+    "Edadidadaj",
+    "Rdidakadis",
+    "Tdikakakag",
+    "Ydidakatuk",
+    "Uditutudad",
+    "Idadidituh",
+    "Qdidadatua",
+    "Wdakadikaf",
+    "Ekatudidij",
+    "Rtudadikas",
+    "Tkadaditug",
+    "Ydikadakak",
+    "Ututudadid",
+    "Ikatututuh",
+};
 
-        if (h2 >= '0' && h2 <= '9') val += (h2 - '0');
-        else if (h2 >= 'a' && h2 <= 'f') val += (h2 - 'a' + 10);
-        else {
-            (*env)->ReleaseStringUTFChars(env, reversed_key, rev);
-            return (*env)->NewStringUTF(env, "");
-        }
+static const char *GROUP_6[16] = {
+    "Qtudidadaa",
+    "Wdidadatuf",
+    "Edidikadaj",
+    "Rditudadis",
+    "Tdadidatug",
+    "Ydatutudak",
+    "Ukakadadad",
+    "Iditukatuh",
+    "Qkadadikaa",
+    "Wdadididif",
+    "Edididikaj",
+    "Rdiditutus",
+    "Tdikadadag",
+    "Ytutudidak",
+    "Udatututud",
+    "Iditudadah",
+};
 
-        encoded_bytes[i] = (unsigned char)val;
-    }
+static const char *GROUP_7[16] = {
+    "Qkatukadaa",
+    "Wdakadatuf",
+    "Ekakadakaj",
+    "Rdatukakas",
+    "Tdadakatug",
+    "Ydakadadak",
+    "Ukakadatud",
+    "Ikatutudah",
+    "Qtukadidia",
+    "Wtukatukaf",
+    "Etukatudaj",
+    "Rdidatutus",
+    "Tkatuditug",
+    "Ydakadikak",
+    "Udidatutud",
+    "Ikakakakah",
+};
 
-    /* Undo shuffle: OUTPUT[i] = INPUT[SHUFFLE[i]] */
-    /* So INPUT[SHUFFLE[i]] = OUTPUT[i] → to get INPUT at i, find where i came from */
-    for (int i = 0; i < 64; i++) {
-        int src = -1;
-        for (int s = 0; s < 64; s++) {
-            if (SHUFFLE[s] == i) {
-                src = s;
-                break;
-            }
-        }
-        if (src >= 0) {
-            /* Undo XOR: original = encoded ^ (XOR_SEED + src_pos) */
-            unsigned char xor_val = (XOR_SEED + src) & 0xFF;
-            original_bytes[i] = encoded_bytes[src] ^ xor_val;
-        } else {
-            original_bytes[i] = encoded_bytes[i];
-        }
-    }
+static const char **ALL_GROUPS[GROUP_COUNT] = {
+    GROUP_0, GROUP_1, GROUP_2, GROUP_3, GROUP_4, GROUP_5, GROUP_6, GROUP_7
+};
 
-    /* Convert back to hex string */
-    char *output = (char*)malloc(129);
-    if (!output) {
-        (*env)->ReleaseStringUTFChars(env, reversed_key, rev);
-        return (*env)->NewStringUTF(env, "");
-    }
+static const unsigned char GROUP_ORDER[GROUP_COUNT] = {5, 1, 7, 0, 6, 3, 4, 2};
 
-    for (int i = 0; i < 64; i++) {
-        unsigned char b = original_bytes[i];
-        output[i * 2]     = (b >> 4) + ((b >> 4) < 10 ? '0' : 'a' - 10);
-        output[i * 2 + 1] = (b & 0x0F) + ((b & 0x0F) < 10 ? '0' : 'a' - 10);
-    }
-    output[128] = '\0';
-
-    (*env)->ReleaseStringUTFChars(env, reversed_key, rev);
-
-    jstring result = (*env)->NewStringUTF(env, output);
-    free(output);
-    return result;
+static inline unsigned char ror8(unsigned char value, unsigned char shift) {
+    return (unsigned char)((value >> shift) | (value << (8 - shift)));
 }
 
-/*
- * Verify key format: 128 chars, lowercase hex, starts with 'c'.
- */
-JNIEXPORT jint JNICALL
-Java_com_cs702_aigenerator_NativeKeyStore_verifyNative(
-    JNIEnv *env,
-    jobject obj,
-    jstring key)
-{
-    const char *key_str = (*env)->GetStringUTFChars(env, key, NULL);
-    int len = (*env)->GetStringLength(env, key);
+static unsigned char rolling_mask(int index) {
+    return (unsigned char)((0x39 + index * 17 + (index % 7) * 13) & 0xFF);
+}
 
-    if (len != 128) {
-        (*env)->ReleaseStringUTFChars(env, key, key_str);
-        return 0;
+static void secure_zero(void *ptr, size_t len) {
+    volatile unsigned char *p = (volatile unsigned char *) ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+}
+
+static int token_value(const char *token) {
+    if (token[0] == 'd' && token[1] == 'i') return 0;
+    if (token[0] == 'd' && token[1] == 'a') return 1;
+    if (token[0] == 't' && token[1] == 'u') return 2;
+    if (token[0] == 'k' && token[1] == 'a') return 3;
+    return -1;
+}
+
+static int decode_chunk(const char *chunk, int original_index, char *out_char) {
+    if (chunk == NULL || out_char == NULL) return 0;
+    if ((int) strlen(chunk) != CHUNK_LENGTH) return 0;
+
+    unsigned char value = 0;
+    for (int offset = 1; offset < CHUNK_LENGTH - 1; offset += 2) {
+        int code = token_value(&chunk[offset]);
+        if (code < 0) return 0;
+        value = (unsigned char) ((value << 2) | (unsigned char) code);
     }
 
-    /* Must start with 'c' */
-    if (key_str[0] != 'c') {
-        (*env)->ReleaseStringUTFChars(env, key, key_str);
-        return 0;
-    }
+    unsigned char plain = (unsigned char) (ror8(value, 3) ^ rolling_mask(original_index));
+    *out_char = (char) plain;
+    return 1;
+}
 
-    /* All chars must be lowercase hex */
-    for (int i = 0; i < 128; i++) {
-        char c = key_str[i];
+static uint64_t fnv1a64(const char *value) {
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (int i = 0; i < KEY_LENGTH; i++) {
+        hash ^= (unsigned char) value[i];
+        hash *= 0x100000001b3ULL;
+    }
+    return hash;
+}
+
+static int validate_key_impl(const char *key) {
+    if (key == NULL) return 0;
+    if ((int) strlen(key) != KEY_LENGTH) return 0;
+
+    for (int i = 0; i < KEY_LENGTH; i++) {
+        char c = key[i];
         if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
-            (*env)->ReleaseStringUTFChars(env, key, key_str);
             return 0;
         }
     }
 
+    if (key[0] != '4' || key[KEY_LENGTH - 1] != '8') return 0;
+    return fnv1a64(key) == EXPECTED_FNV64 ? 1 : 0;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_buildNativeKey(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    char key[KEY_LENGTH + 1];
+    memset(key, 0, sizeof(key));
+
+    for (int group_index = 0; group_index < GROUP_COUNT; group_index++) {
+        int original_group = GROUP_ORDER[group_index];
+        for (int item_index = 0; item_index < GROUP_SIZE; item_index++) {
+            int original_index = original_group * GROUP_SIZE + item_index;
+            if (!decode_chunk(ALL_GROUPS[group_index][item_index], original_index, &key[original_index])) {
+                secure_zero(key, sizeof(key));
+                return (*env)->NewStringUTF(env, "");
+            }
+        }
+    }
+
+    key[KEY_LENGTH] = '\0';
+    if (!validate_key_impl(key)) {
+        secure_zero(key, sizeof(key));
+        return (*env)->NewStringUTF(env, "");
+    }
+
+    jstring result = (*env)->NewStringUTF(env, key);
+    secure_zero(key, sizeof(key));
+    return result;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_verifyNative(JNIEnv *env, jclass clazz, jstring key) {
+    (void) clazz;
+    if (key == NULL) return 0;
+
+    const char *key_str = (*env)->GetStringUTFChars(env, key, NULL);
+    if (key_str == NULL) return 0;
+
+    int valid = validate_key_impl(key_str);
     (*env)->ReleaseStringUTFChars(env, key, key_str);
-    return 1;
+    return valid;
 }
