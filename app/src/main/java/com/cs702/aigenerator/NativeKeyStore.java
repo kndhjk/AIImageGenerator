@@ -11,7 +11,6 @@ import android.content.Context;
 public final class NativeKeyStore {
 
     private static final int REQUIRED_LENGTH = 128;
-    private static final String EXPECTED_PACKAGE = "com.cs702.aigenerator";
 
     private static boolean nativeLoaded = false;
 
@@ -29,6 +28,8 @@ public final class NativeKeyStore {
     private static native String buildNativeKey();
     private static native int verifyNative(String key);
     private static native int nativeRuntimeSafe();
+    private static native String nativeExpectedPackage();
+    private static native String nativeBaseUrl();
 
     public static String getApiKey() {
         if (!nativeLoaded || nativeRuntimeSafe() != 1) return "";
@@ -42,7 +43,7 @@ public final class NativeKeyStore {
 
     public static String getApiKey(Context context) {
         if (context == null || !nativeLoaded) return "";
-        if (!EXPECTED_PACKAGE.equals(context.getPackageName())) return "";
+        if (!nativeExpectedPackage().equals(context.getPackageName())) return "";
         if (RuntimeGuard.shouldBlockSensitiveOps(context)) return "";
 
         String key = getApiKey();
@@ -64,5 +65,10 @@ public final class NativeKeyStore {
     public static String getAuthHeaderName() {
         char[] obfuscated = {65, 117, 116, 104, 111, 114, 105, 122, 97, 116, 105, 111, 110};
         return new String(obfuscated);
+    }
+
+    public static String getBaseUrl() {
+        if (!nativeLoaded || nativeRuntimeSafe() != 1) return "";
+        return nativeBaseUrl();
     }
 }

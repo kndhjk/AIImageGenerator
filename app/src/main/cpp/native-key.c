@@ -11,6 +11,20 @@
 #define GROUP_COUNT 8
 #define GROUP_SIZE 16
 #define EXPECTED_FNV64 0x61074e8225321d6bULL
+#define PACKAGE_LENGTH 21
+#define BASE_URL_LENGTH 28
+#define META_XOR 0x20
+
+static const unsigned char EXPECTED_PACKAGE_OBF[PACKAGE_LENGTH] = {
+    0x43, 0x4f, 0x4d, 0x0e, 0x43, 0x53, 0x17, 0x10, 0x12, 0x0e, 0x41,
+    0x49, 0x47, 0x45, 0x4e, 0x45, 0x52, 0x41, 0x54, 0x4f, 0x52
+};
+
+static const unsigned char BASE_URL_OBF[BASE_URL_LENGTH] = {
+    0x48, 0x54, 0x54, 0x50, 0x53, 0x1a, 0x0f, 0x0f, 0x41, 0x49, 0x0e,
+    0x45, 0x4c, 0x4C, 0x49, 0x4F, 0x54, 0x54, 0x57, 0x45, 0x4E, 0x0e,
+    0x49, 0x4E, 0x46, 0x4F, 0x0F, 0x0F
+};
 
 static const char *GROUP_0[16] = {
     "Qdikadadia",
@@ -169,6 +183,13 @@ static const char **ALL_GROUPS[GROUP_COUNT] = {
 };
 
 static const unsigned char GROUP_ORDER[GROUP_COUNT] = {5, 1, 7, 0, 6, 3, 4, 2};
+
+static void decode_meta(const unsigned char *src, size_t len, char *dst) {
+    for (size_t i = 0; i < len; i++) {
+        dst[i] = (char) (src[i] ^ META_XOR);
+    }
+    dst[len] = '\0';
+}
 
 static inline unsigned char ror8(unsigned char value, unsigned char shift) {
     return (unsigned char)((value >> shift) | (value << (8 - shift)));
@@ -380,4 +401,26 @@ Java_com_cs702_aigenerator_NativeKeyStore_nativeRuntimeSafe(JNIEnv *env, jclass 
     (void) env;
     (void) clazz;
     return runtime_safe_impl() ? 1 : 0;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeExpectedPackage(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    char value[PACKAGE_LENGTH + 1];
+    memset(value, 0, sizeof(value));
+    decode_meta(EXPECTED_PACKAGE_OBF, PACKAGE_LENGTH, value);
+    jstring result = (*env)->NewStringUTF(env, value);
+    secure_zero(value, sizeof(value));
+    return result;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeBaseUrl(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    char value[BASE_URL_LENGTH + 1];
+    memset(value, 0, sizeof(value));
+    decode_meta(BASE_URL_OBF, BASE_URL_LENGTH, value);
+    jstring result = (*env)->NewStringUTF(env, value);
+    secure_zero(value, sizeof(value));
+    return result;
 }

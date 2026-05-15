@@ -56,7 +56,6 @@ public class MainActivity extends AppCompatActivity {
     private String lastGeneratedImageUrl;
 
     private static final String TAG = "AIImageGen.Main";
-    private static final String BASE_URL = "https://ai.elliottwen.info/";
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -122,8 +121,13 @@ public class MainActivity extends AppCompatActivity {
         OkHttpClient client = builder.build();
         Log.d(TAG, "setupApiService: OkHttpClient built, logging=" + logging.getLevel());
 
+        String baseUrl = NativeKeyStore.getBaseUrl();
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            throw new IllegalStateException("baseUrl unavailable");
+        }
+
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
+                .baseUrl(baseUrl)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
@@ -218,7 +222,8 @@ public class MainActivity extends AppCompatActivity {
                                 return;
                             }
 
-                            String fullUrl = raw.startsWith("http") ? raw : BASE_URL + raw;
+                            String baseUrl = NativeKeyStore.getBaseUrl();
+                            String fullUrl = raw.startsWith("http") ? raw : baseUrl + raw;
                             lastGeneratedImageUrl = fullUrl;
                             showImage(fullUrl);
                         } catch (Exception e) {

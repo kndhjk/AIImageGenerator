@@ -17,15 +17,19 @@ import retrofit2.converter.gson.GsonConverterFactory;
  */
 public class ApiClient {
 
-    private static final String BASE_URL = "https://ai.elliottwen.info/";
     private static ApiService apiService;
 
     public static synchronized ApiService getApiService(Context context) {
         if (apiService == null) {
             OkHttpClient client = SecurityConfig.buildSecureOkHttpClient(context);
 
+            String baseUrl = NativeKeyStore.getBaseUrl();
+            if (baseUrl == null || baseUrl.isEmpty()) {
+                throw new IllegalStateException("baseUrl unavailable");
+            }
+
             Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
+                .baseUrl(baseUrl)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();

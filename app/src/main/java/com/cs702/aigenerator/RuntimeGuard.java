@@ -2,7 +2,10 @@ package com.cs702.aigenerator;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.os.Build;
 import android.os.Debug;
 import android.os.Looper;
 
@@ -11,6 +14,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +34,8 @@ public final class RuntimeGuard {
             "frida", "gadget", "gum-js-loop", "frida-agent",
             "xposed", "substrate", "riru", "zygisk", "magisk"
     };
+    private static final String EXPECTED_SIGNER_SHA256 = "FDA5FA694408194CE95AB6E1C7F5E1EC315BAF9EB5BC7C82A475416FEAED0356";
+
     private static final String[] SUSPICIOUS_PACKAGES = {
             "re.frida.server",
             "com.frida.server",
@@ -81,6 +88,10 @@ public final class RuntimeGuard {
 
         if (hasSuspiciousPackages(context)) {
             reasons.add("Suspicious instrumentation package installed");
+        }
+
+        if (!hasExpectedSigningCert(context)) {
+            reasons.add("Unexpected APK signing certificate");
         }
 
         if (RootDetector.check(context).isRooted) {
@@ -184,5 +195,51 @@ public final class RuntimeGuard {
             }
         }
         return false;
+    }
+
+    private static boolean hasExpectedSigningCert(Context context) {
+        try {
+            PackageManager pm = context.getPackageManager();
+            PackageInfo info;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
+                if (info.signingInfo == null) return false;
+                Signature[] signatures = info.signingInfo.hasMultipleSigners()
+                    ? info.signingInfo.getApkContentsSigners()
+                    : info.signingInfo.getSigningCertificateHistory();
+                return matchesAnySignature(signatures);
+            }
+
+            info = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNATURES);
+            return matchesAnySignature(info.signatures);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean matchesAnySignature(Signature[] signatures) {
+        if (signatures == null || signatures.length == 0) return false;
+        for (Signature signature : signatures) {
+            String digest = sha256Hex(signature.toByteArray());
+            if (EXPECTED_SIGNER_SHA256.equals(digest)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String sha256Hex(byte[] data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(data);
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString().toUpperCase();
+        } catch (NoSuchAlgorithmException e) {
+            return "";
+        }
     }
 }
