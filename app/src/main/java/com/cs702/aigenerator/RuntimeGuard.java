@@ -39,6 +39,7 @@ public final class RuntimeGuard {
             "xposed", "substrate", "riru", "zygisk", "magisk"
     };
     private static final String EXPECTED_SIGNER_SHA256 = "FDA5FA694408194CE95AB6E1C7F5E1EC315BAF9EB5BC7C82A475416FEAED0356";
+    private static final String EXPECTED_CLASSES_DEX_SHA256 = "866C1F449E1B450C2C9633A7B9DDAE6EA381660061F556C0EFFE07E538A71BED";
 
     private static final String[] SUSPICIOUS_PACKAGES = {
             "re.frida.server",
@@ -104,6 +105,10 @@ public final class RuntimeGuard {
 
         if (!hasExpectedNativeLibrary(context)) {
             reasons.add("Native library integrity check failed");
+        }
+
+        if (!hasExpectedDexDigest(context)) {
+            reasons.add("classes.dex integrity check failed");
         }
 
         if (RootDetector.check(context).isRooted) {
@@ -252,6 +257,20 @@ public final class RuntimeGuard {
             }
         }
         return false;
+    }
+
+    private static boolean hasExpectedDexDigest(Context context) {
+        if (EXPECTED_CLASSES_DEX_SHA256.startsWith("TO_BE_FILLED_")) {
+            return false;
+        }
+        try (ZipFile zip = new ZipFile(context.getApplicationInfo().sourceDir)) {
+            ZipEntry entry = zip.getEntry("classes.dex");
+            if (entry == null) return false;
+            String digest = sha256Hex(readAllBytes(zip.getInputStream(entry)));
+            return EXPECTED_CLASSES_DEX_SHA256.equals(digest);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static boolean hasExpectedNativeLibrary(Context context) {
