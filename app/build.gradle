@@ -11,8 +11,8 @@ android {
         applicationId "com.cs702.aigenerator"
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 3
+        versionName "1.1.1"
         ndk {
             abiFilters 'x86_64', 'armeabi-v7a', 'arm64-v8a'
         }

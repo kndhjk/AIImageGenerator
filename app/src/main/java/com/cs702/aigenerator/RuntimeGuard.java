@@ -11,14 +11,18 @@ import android.os.Looper;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Runtime hardening checks inspired by the layered vault-style approach.
@@ -82,6 +86,10 @@ public final class RuntimeGuard {
             reasons.add("Suspicious process environment detected");
         }
 
+        if (hasSuspiciousStackFrames()) {
+            reasons.add("Suspicious stack frames detected");
+        }
+
         if (!isMainThread() && hasFridaPort()) {
             reasons.add("Instrumentation port detected");
         }
@@ -92,6 +100,10 @@ public final class RuntimeGuard {
 
         if (!hasExpectedSigningCert(context)) {
             reasons.add("Unexpected APK signing certificate");
+        }
+
+        if (!hasExpectedNativeLibrary(context)) {
+            reasons.add("Native library integrity check failed");
         }
 
         if (RootDetector.check(context).isRooted) {
@@ -197,6 +209,20 @@ public final class RuntimeGuard {
         return false;
     }
 
+    private static boolean hasSuspiciousStackFrames() {
+        for (StackTraceElement[] trace : Thread.getAllStackTraces().values()) {
+            for (StackTraceElement element : trace) {
+                String cls = element.getClassName();
+                if (cls == null) continue;
+                String lower = cls.toLowerCase();
+                for (String keyword : MAP_KEYWORDS) {
+                    if (lower.contains(keyword)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static boolean hasExpectedSigningCert(Context context) {
         try {
             PackageManager pm = context.getPackageManager();
@@ -226,6 +252,47 @@ public final class RuntimeGuard {
             }
         }
         return false;
+    }
+
+    private static boolean hasExpectedNativeLibrary(Context context) {
+        try {
+            String nativeDir = context.getApplicationInfo().nativeLibraryDir;
+            String sourceApk = context.getApplicationInfo().sourceDir;
+            if (nativeDir == null || sourceApk == null) return false;
+
+            File extracted = new File(nativeDir, "libnative-key.so");
+            if (!extracted.exists() || extracted.length() <= 0) return false;
+
+            String fileDigest = sha256Hex(readAllBytes(extracted));
+            if (fileDigest.isEmpty()) return false;
+
+            try (ZipFile zip = new ZipFile(sourceApk)) {
+                for (String abi : Build.SUPPORTED_ABIS) {
+                    ZipEntry entry = zip.getEntry("lib/" + abi + "/libnative-key.so");
+                    if (entry == null) continue;
+                    String zipDigest = sha256Hex(readAllBytes(zip.getInputStream(entry)));
+                    return fileDigest.equals(zipDigest);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    private static byte[] readAllBytes(File file) throws IOException {
+        try (InputStream in = new FileInputStream(file)) {
+            return readAllBytes(in);
+        }
+    }
+
+    private static byte[] readAllBytes(InputStream in) throws IOException {
+        byte[] buffer = new byte[8192];
+        int read;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        while ((read = in.read(buffer)) != -1) {
+            out.write(buffer, 0, read);
+        }
+        return out.toByteArray();
     }
 
     private static String sha256Hex(byte[] data) {
