@@ -180,7 +180,9 @@ public class MainActivity extends AppCompatActivity {
     private void startGeneration(String prompt) {
         Log.d(TAG, "generateImage: calling apiService.auth()");
         // Step 1: Authenticate with API key
-        apiService.auth().enqueue(new Callback<AuthResponse>() {
+        Call<AuthResponse> authCall = apiService.auth();
+        currentCall = authCall;
+        authCall.enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
                 Log.d(TAG, "auth onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
@@ -190,6 +192,7 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
+                currentCall = null;
                 String signature = response.body().getSignature();
                 Log.d(TAG, "auth success: signature received");
 
@@ -201,7 +204,9 @@ public class MainActivity extends AppCompatActivity {
                 // Step 2: Generate image with signature from auth
                 GenerateRequest request = new GenerateRequest(signature, prompt);
                 Log.d(TAG, "generateImage: calling apiService.generateImage()");
-                apiService.generateImage(request).enqueue(new Callback<ResponseBody>() {
+                Call<ResponseBody> generateCall = apiService.generateImage(request);
+                currentCall = generateCall;
+                generateCall.enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                         Log.d(TAG, "generate onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
@@ -210,6 +215,7 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
 
+                        currentCall = null;
                         try {
                             // Server returns plain string like "images/xxx.jpg"
                             String raw = response.body().string().trim();
@@ -235,6 +241,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(Call<ResponseBody> call, Throwable t) {
                         Log.d(TAG, "generate onFailure: " + t.getMessage());
+                        currentCall = null;
                         if (!call.isCanceled()) {
                             onError(getString(R.string.error_network));
                         }
@@ -245,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
                 Log.d(TAG, "auth onFailure: " + t.getMessage());
+                currentCall = null;
                 if (!call.isCanceled()) {
                     onError(getString(R.string.error_network));
                 }

@@ -6,7 +6,7 @@ Android app for CS702 Build & Fortify. It generates images from text prompts via
 
 ## Current version
 
-- Version: `v1.1.4`
+- Version: `v1.1.5`
 - Package: `com.cs702.aigenerator`
 - Release APK: GitHub Releases
 - ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`
@@ -233,7 +233,7 @@ app/build/outputs/apk/release/app-release-unsigned.apk
 Signed release APK used in this project line:
 
 ```text
-app/build/outputs/apk/release/AIImageGenerator-v1.1.4-release-signed.apk
+app/build/outputs/apk/release/AIImageGenerator-v1.1.5-release-signed.apk
 ```
 
 ---
@@ -258,14 +258,14 @@ Typical steps:
   --ks-pass pass:android ^
   --key-pass pass:android ^
   --ks-key-alias androiddebugkey ^
-  --out AIImageGenerator-v1.1.4-release-signed.apk ^
+  --out AIImageGenerator-v1.1.5-release-signed.apk ^
   aligned.apk
 ```
 
 ### 3. verify signature
 
 ```bat
-%LOCALAPPDATA%\Android\Sdk\build-tools\35.0.0\apksigner.bat verify -v AIImageGenerator-v1.1.4-release-signed.apk
+%LOCALAPPDATA%\Android\Sdk\build-tools\35.0.0\apksigner.bat verify -v AIImageGenerator-v1.1.5-release-signed.apk
 ```
 
 ---
@@ -278,7 +278,7 @@ With an emulator/device already running:
 
 ```bat
 %LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe devices
-%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe -s emulator-5554 install -r app\build\outputs\apk\release\AIImageGenerator-v1.1.4-release-signed.apk
+%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe -s emulator-5554 install -r app\build\outputs\apk\release\AIImageGenerator-v1.1.5-release-signed.apk
 ```
 
 ### Launch the app
@@ -318,16 +318,16 @@ git push origin main
 Example:
 
 ```bash
-gh release create v1.1.4 \
-  ./AIImageGenerator-v1.1.4-release-signed.apk#AIImageGenerator-v1.1.4-release-signed.apk \
-  --title "v1.1.4" \
+gh release create v1.1.5 \
+  ./AIImageGenerator-v1.1.5-release-signed.apk#AIImageGenerator-v1.1.5-release-signed.apk \
+  --title "v1.1.5" \
   --notes "Release notes here"
 ```
 
 ### 3. View release
 
 ```bash
-gh release view v1.1.4
+gh release view v1.1.5
 ```
 
 ---
@@ -391,4 +391,4 @@ With the interceptor model, that value is injected closer to the actual request 
 
 - Repository: <https://github.com/kndhjk/AIImageGenerator>
 - Releases: <https://github.com/kndhjk/AIImageGenerator/releases>
-- Current release target: `v1.1.4`
+- Current release target: `v1.1.5`

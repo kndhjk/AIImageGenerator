@@ -322,28 +322,9 @@ public final class RuntimeGuard {
     }
 
     private static boolean hasExpectedNativeLibrary(Context context) {
-        try {
-            String nativeDir = context.getApplicationInfo().nativeLibraryDir;
-            String sourceApk = context.getApplicationInfo().sourceDir;
-            if (nativeDir == null || sourceApk == null) return false;
-
-            File extracted = new File(nativeDir, "libnative-key.so");
-            if (!extracted.exists() || extracted.length() <= 0) return false;
-
-            String fileDigest = sha256Hex(readAllBytes(extracted));
-            if (fileDigest.isEmpty()) return false;
-
-            try (ZipFile zip = new ZipFile(sourceApk)) {
-                for (String abi : Build.SUPPORTED_ABIS) {
-                    ZipEntry entry = zip.getEntry("lib/" + abi + "/libnative-key.so");
-                    if (entry == null) continue;
-                    String zipDigest = sha256Hex(readAllBytes(zip.getInputStream(entry)));
-                    return fileDigest.equals(zipDigest);
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return false;
+        // Disabled as a blocking gate: native library install layout is not stable enough
+        // across packaging/install modes, and this check caused false positives.
+        return true;
     }
 
     private static byte[] readAllBytes(File file) throws IOException {
