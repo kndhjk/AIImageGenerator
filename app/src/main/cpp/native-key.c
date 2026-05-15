@@ -13,7 +13,28 @@
 #define EXPECTED_FNV64 0x61074e8225321d6bULL
 #define PACKAGE_LENGTH 21
 #define BASE_URL_LENGTH 28
+#define HEADER_LENGTH 13
+#define AUTH_PATH_LENGTH 5
+#define GENERATE_PATH_LENGTH 15
 #define META_XOR 0x20
+
+static const unsigned char AUTH_HEADER_OBF[HEADER_LENGTH] = {
+    0x61, 0x55, 0x54, 0x48, 0x4f, 0x52, 0x49, 0x5A, 0x41, 0x54, 0x49, 0x4F, 0x4E
+};
+
+static const unsigned char AUTH_PATH_OBF[AUTH_PATH_LENGTH] = {
+    0x0F, 0x41, 0x55, 0x54, 0x48
+};
+
+static const unsigned char GENERATE_PATH_OBF[GENERATE_PATH_LENGTH] = {
+    0x0F, 0x47, 0x45, 0x4E, 0x45, 0x52, 0x41, 0x54, 0x45, 0x7F, 0x49, 0x4D, 0x41, 0x47, 0x45
+};
+
+static const char *EXPECTED_CLASSES_DEX_SHA256 = "8E145FE82C0F74C470DF373738635928B209297C35FB2708174AB899B01EB4F5";
+static const char *EXPECTED_MANIFEST_SHA256 = "824046D1AA775F7169975F44EFB97C97C74DE38188AA84AEA7E4CC4F2AA3E49E";
+static const char *EXPECTED_RESOURCES_ARSC_SHA256 = "51DDE9C270DD973EB5F92A54150A3BC8AC52193886D2CD944461C6B4910A4D66";
+
+static void secure_zero(void *ptr, size_t len);
 
 static const unsigned char EXPECTED_PACKAGE_OBF[PACKAGE_LENGTH] = {
     0x43, 0x4f, 0x4d, 0x0e, 0x43, 0x53, 0x17, 0x10, 0x12, 0x0e, 0x41,
@@ -189,6 +210,18 @@ static void decode_meta(const unsigned char *src, size_t len, char *dst) {
         dst[i] = (char) (src[i] ^ META_XOR);
     }
     dst[len] = '\0';
+}
+
+static jstring new_meta_string(JNIEnv *env, const unsigned char *src, size_t len) {
+    char buf[BASE_URL_LENGTH + 1];
+    if (len > BASE_URL_LENGTH) {
+        return (*env)->NewStringUTF(env, "");
+    }
+    memset(buf, 0, sizeof(buf));
+    decode_meta(src, len, buf);
+    jstring result = (*env)->NewStringUTF(env, buf);
+    secure_zero(buf, sizeof(buf));
+    return result;
 }
 
 static inline unsigned char ror8(unsigned char value, unsigned char shift) {
@@ -417,10 +450,41 @@ Java_com_cs702_aigenerator_NativeKeyStore_nativeExpectedPackage(JNIEnv *env, jcl
 JNIEXPORT jstring JNICALL
 Java_com_cs702_aigenerator_NativeKeyStore_nativeBaseUrl(JNIEnv *env, jclass clazz) {
     (void) clazz;
-    char value[BASE_URL_LENGTH + 1];
-    memset(value, 0, sizeof(value));
-    decode_meta(BASE_URL_OBF, BASE_URL_LENGTH, value);
-    jstring result = (*env)->NewStringUTF(env, value);
-    secure_zero(value, sizeof(value));
-    return result;
+    return new_meta_string(env, BASE_URL_OBF, BASE_URL_LENGTH);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeAuthHeaderName(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return new_meta_string(env, AUTH_HEADER_OBF, HEADER_LENGTH);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeAuthPath(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return new_meta_string(env, AUTH_PATH_OBF, AUTH_PATH_LENGTH);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeGeneratePath(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return new_meta_string(env, GENERATE_PATH_OBF, GENERATE_PATH_LENGTH);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeExpectedClassesDexSha256(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return (*env)->NewStringUTF(env, EXPECTED_CLASSES_DEX_SHA256);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeExpectedManifestSha256(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return (*env)->NewStringUTF(env, EXPECTED_MANIFEST_SHA256);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeExpectedResourcesArscSha256(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    return (*env)->NewStringUTF(env, EXPECTED_RESOURCES_ARSC_SHA256);
 }

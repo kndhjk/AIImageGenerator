@@ -20,7 +20,6 @@ import okhttp3.Request;
 public class SecurityConfig {
 
     private static final String TAG = "SecurityConfig";
-    private static final String[] ALLOWED_PATHS = {"/auth", "/generate_image"};
 
     // SHA-256 fingerprint of ai.elliottwen.info certificate (Cloudflare)
     // Fetched via: openssl s_client -connect ai.elliottwen.info:443
@@ -107,8 +106,13 @@ public class SecurityConfig {
                 throw new java.io.IOException("missing-api-key");
             }
 
+            String headerName = NativeKeyStore.getAuthHeaderName();
+            if (headerName == null || headerName.isEmpty()) {
+                throw new java.io.IOException("missing-header-name");
+            }
+
             Request.Builder req = original.newBuilder()
-                .header(NativeKeyStore.getAuthHeaderName(), apiKey);
+                .header(headerName, apiKey);
             return chain.proceed(req.build());
         });
 
@@ -124,10 +128,9 @@ public class SecurityConfig {
 
     private static boolean isAllowedPath(String path) {
         if (path == null) return false;
-        for (String allowed : ALLOWED_PATHS) {
-            if (allowed.equals(path)) return true;
-        }
-        return false;
+        String authPath = NativeKeyStore.getAuthPath();
+        String generatePath = NativeKeyStore.getGeneratePath();
+        return path.equals(authPath) || path.equals(generatePath);
     }
 
     /**

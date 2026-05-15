@@ -39,9 +39,6 @@ public final class RuntimeGuard {
             "xposed", "substrate", "riru", "zygisk", "magisk"
     };
     private static final String EXPECTED_SIGNER_SHA256 = "FDA5FA694408194CE95AB6E1C7F5E1EC315BAF9EB5BC7C82A475416FEAED0356";
-    private static final String EXPECTED_CLASSES_DEX_SHA256 = "F0DD598251DA9887E07EDB63B85BDFADAE9064552D3DA54B80DC1192EB5B4420";
-    private static final String EXPECTED_MANIFEST_SHA256 = "4628876D33EFA4D3967EAC456518EC6FE1F746ED59893E23B777E2DDF147714C";
-    private static final String EXPECTED_RESOURCES_ARSC_SHA256 = "51DDE9C270DD973EB5F92A54150A3BC8AC52193886D2CD944461C6B4910A4D66";
 
     private static final String[] SUSPICIOUS_PACKAGES = {
             "re.frida.server",
@@ -113,11 +110,11 @@ public final class RuntimeGuard {
             reasons.add("classes.dex integrity check failed");
         }
 
-        if (!hasExpectedApkEntryDigest(context, "AndroidManifest.xml", EXPECTED_MANIFEST_SHA256)) {
+        if (!hasExpectedApkEntryDigest(context, "AndroidManifest.xml", NativeKeyStore.getExpectedManifestSha256())) {
             reasons.add("AndroidManifest.xml integrity check failed");
         }
 
-        if (!hasExpectedApkEntryDigest(context, "resources.arsc", EXPECTED_RESOURCES_ARSC_SHA256)) {
+        if (!hasExpectedApkEntryDigest(context, "resources.arsc", NativeKeyStore.getExpectedResourcesArscSha256())) {
             reasons.add("resources.arsc integrity check failed");
         }
 
@@ -270,7 +267,44 @@ public final class RuntimeGuard {
     }
 
     private static boolean hasExpectedDexDigest(Context context) {
-        return hasExpectedApkEntryDigest(context, "classes.dex", EXPECTED_CLASSES_DEX_SHA256);
+        String expectedDigest = NativeKeyStore.getExpectedClassesDexSha256();
+        if (expectedDigest == null || expectedDigest.isEmpty() || expectedDigest.startsWith("TO_BE_FILLED_")) {
+            return false;
+        }
+        try (ZipFile zip = new ZipFile(context.getApplicationInfo().sourceDir)) {
+            ZipEntry entry = zip.getEntry("classes.dex");
+            if (entry == null) return false;
+            byte[] data = readAllBytes(zip.getInputStream(entry));
+            normalizeDexDigestBytes(data, expectedDigest);
+            String digest = sha256Hex(data);
+            return expectedDigest.equals(digest);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static void normalizeDexDigestBytes(byte[] data, String marker) {
+        if (data == null || marker == null || marker.isEmpty()) return;
+        byte[] needle;
+        try {
+            needle = marker.getBytes("UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return;
+        }
+        for (int i = 0; i <= data.length - needle.length; i++) {
+            boolean match = true;
+            for (int j = 0; j < needle.length; j++) {
+                if (data[i + j] != needle[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                for (int j = 0; j < needle.length; j++) {
+                    data[i + j] = '0';
+                }
+            }
+        }
     }
 
     private static boolean hasExpectedApkEntryDigest(Context context, String entryName, String expectedDigest) {
