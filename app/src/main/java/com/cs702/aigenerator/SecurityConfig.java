@@ -20,6 +20,7 @@ import okhttp3.Request;
 public class SecurityConfig {
 
     private static final String TAG = "SecurityConfig";
+    private static final String[] ALLOWED_PATHS = {"/auth", "/generate_image"};
 
     // SHA-256 fingerprint of ai.elliottwen.info certificate (Cloudflare)
     // Fetched via: openssl s_client -connect ai.elliottwen.info:443
@@ -54,7 +55,9 @@ public class SecurityConfig {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS);
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false);
 
         // Only enable certificate pinning in release builds
         if (!isDebug) {
@@ -80,14 +83,32 @@ public class SecurityConfig {
                 throw new java.io.IOException("invalid-base-url");
             }
 
-            Request.Builder req = original.newBuilder();
-            if (expected.host().equals(url.host())) {
-                String apiKey = NativeKeyStore.getApiKey(context);
-                if (!NativeKeyStore.isKeyValid(apiKey)) {
-                    throw new java.io.IOException("missing-api-key");
-                }
-                req.header(NativeKeyStore.getAuthHeaderName(), apiKey);
+            if (!expected.isHttps() || !url.isHttps()) {
+                throw new java.io.IOException("non-https-blocked");
             }
+            if (!expected.host().equals(url.host())) {
+                throw new java.io.IOException("unexpected-host");
+            }
+            if (expected.port() != url.port()) {
+                throw new java.io.IOException("unexpected-port");
+            }
+            if (!"POST".equals(original.method())) {
+                throw new java.io.IOException("unexpected-method");
+            }
+            if (!isAllowedPath(url.encodedPath())) {
+                throw new java.io.IOException("unexpected-path");
+            }
+            if (url.querySize() > 0) {
+                throw new java.io.IOException("unexpected-query");
+            }
+
+            String apiKey = NativeKeyStore.getApiKey(context);
+            if (!NativeKeyStore.isKeyValid(apiKey)) {
+                throw new java.io.IOException("missing-api-key");
+            }
+
+            Request.Builder req = original.newBuilder()
+                .header(NativeKeyStore.getAuthHeaderName(), apiKey);
             return chain.proceed(req.build());
         });
 
@@ -99,6 +120,14 @@ public class SecurityConfig {
         }
 
         return builder.build();
+    }
+
+    private static boolean isAllowedPath(String path) {
+        if (path == null) return false;
+        for (String allowed : ALLOWED_PATHS) {
+            if (allowed.equals(path)) return true;
+        }
+        return false;
     }
 
     /**
