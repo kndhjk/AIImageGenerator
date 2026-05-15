@@ -13,11 +13,4 @@
             <certificates src="user" />
         </trust-anchors>
     </domain-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain>4.155.227.179</domain>
-        <trust-anchors>
-            <certificates src="system" />
-            <certificates src="user" />
-        </trust-anchors>
-    </domain-config>
 </network-security-config>

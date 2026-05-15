@@ -24,7 +24,7 @@ import java.util.List;
 public final class RuntimeGuard {
     private RuntimeGuard() {}
 
-    private static final int[] FRIDA_PORTS = {27042, 27043, 23946};
+    private static final int[] FRIDA_PORTS = {27042, 27043, 23946, 23947, 23948, 23949};
     private static final String[] MAP_KEYWORDS = {
             "frida", "gadget", "gum-js-loop", "frida-agent",
             "xposed", "substrate", "riru", "zygisk", "magisk"
@@ -65,6 +65,14 @@ public final class RuntimeGuard {
 
         if (hasSuspiciousMaps()) {
             reasons.add("Suspicious runtime mappings detected");
+        }
+
+        if (hasSuspiciousThreadNames()) {
+            reasons.add("Suspicious runtime thread names detected");
+        }
+
+        if (hasSuspiciousEnvironment()) {
+            reasons.add("Suspicious process environment detected");
         }
 
         if (!isMainThread() && hasFridaPort()) {
@@ -130,6 +138,38 @@ public final class RuntimeGuard {
                 }
             }
         } catch (IOException ignored) {
+        }
+        return false;
+    }
+
+    private static boolean hasSuspiciousThreadNames() {
+        File taskDir = new File("/proc/self/task");
+        File[] tasks = taskDir.listFiles();
+        if (tasks == null) return false;
+
+        for (File task : tasks) {
+            File comm = new File(task, "comm");
+            if (!comm.exists()) continue;
+            try (BufferedReader reader = new BufferedReader(new FileReader(comm))) {
+                String name = reader.readLine();
+                if (name == null) continue;
+                String lower = name.toLowerCase();
+                for (String keyword : MAP_KEYWORDS) {
+                    if (lower.contains(keyword)) return true;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasSuspiciousEnvironment() {
+        String[] keys = {"LD_PRELOAD", "FRIDA_VERSION", "FRIDA_PORT", "XPOSED_ENABLED"};
+        for (String key : keys) {
+            String value = System.getenv(key);
+            if (value != null && !value.trim().isEmpty()) {
+                return true;
+            }
         }
         return false;
     }

@@ -28,9 +28,10 @@ public final class NativeKeyStore {
 
     private static native String buildNativeKey();
     private static native int verifyNative(String key);
+    private static native int nativeRuntimeSafe();
 
     public static String getApiKey() {
-        if (!nativeLoaded) return "";
+        if (!nativeLoaded || nativeRuntimeSafe() != 1) return "";
         try {
             String key = buildNativeKey();
             return isKeyValid(key) ? key : "";
@@ -57,7 +58,7 @@ public final class NativeKeyStore {
                 return false;
             }
         }
-        return nativeLoaded && verifyNative(key) == 1;
+        return nativeLoaded && nativeRuntimeSafe() == 1 && verifyNative(key) == 1;
     }
 
     public static String getAuthHeaderName() {

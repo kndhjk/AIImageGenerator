@@ -145,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "generateImage: START");
 
         String prompt = binding.etPrompt.getText().toString().trim();
-        Log.d(TAG, "generateImage: prompt='" + prompt + "'");
+        Log.d(TAG, "generateImage: prompt received");
 
         if (prompt.isEmpty()) {
             Log.d(TAG, "generateImage: empty prompt");
@@ -162,30 +162,15 @@ public class MainActivity extends AppCompatActivity {
         binding.placeholderContainer.setVisibility(View.GONE);
         binding.btnSave.setEnabled(false);
 
-        RemoteKeyProvider.ensureFragment(getApplicationContext(), new RemoteKeyProvider.Callback() {
-            @Override
-            public void onSuccess(String fragment) {
-                String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
-                Log.d(TAG, "generateImage: remote fragment ok len=" + (fragment != null ? fragment.length() : 0));
-                Log.d(TAG, "generateImage: apiKey length=" + (apiKey != null ? apiKey.length() : "null"));
-                Log.d(TAG, "generateImage: isValidKey=" + NativeKeyStore.isKeyValid(apiKey));
+        String apiKey = NativeKeyStore.getApiKey(getApplicationContext());
+        if (!NativeKeyStore.isKeyValid(apiKey)) {
+            Log.d(TAG, "generateImage: invalid key state");
+            showLoading(false);
+            Toast.makeText(MainActivity.this, R.string.error_key_config, Toast.LENGTH_LONG).show();
+            return;
+        }
 
-                if (!NativeKeyStore.isKeyValid(apiKey)) {
-                    Log.d(TAG, "generateImage: invalid key");
-                    showLoading(false);
-                    Toast.makeText(MainActivity.this, R.string.error_key_config, Toast.LENGTH_LONG).show();
-                    return;
-                }
-
-                startGeneration(prompt, apiKey);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                showLoading(false);
-                Toast.makeText(MainActivity.this, R.string.error_remote_fragment, Toast.LENGTH_LONG).show();
-            }
-        });
+        startGeneration(prompt, apiKey);
     }
 
     private void startGeneration(String prompt, String apiKey) {
@@ -202,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 String signature = response.body().getSignature();
-                Log.d(TAG, "auth success: signature=" + (signature != null ? signature.substring(0, 20) : "null"));
+                Log.d(TAG, "auth success: signature received");
 
                 if (signature == null || signature.isEmpty()) {
                     onError(getString(R.string.error_auth));

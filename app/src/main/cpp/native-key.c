@@ -1,7 +1,10 @@
 #include <jni.h>
+#include <dirent.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define KEY_LENGTH 128
 #define CHUNK_LENGTH 10
@@ -215,6 +218,106 @@ static uint64_t fnv1a64(const char *value) {
     return hash;
 }
 
+static int contains_keyword(const char *haystack) {
+    static const char *keywords[] = {
+        "frida", "gum-js", "gadget", "linjector", "xposed", "substrate", "zygisk", "magisk"
+    };
+    if (haystack == NULL) return 0;
+    for (size_t i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++) {
+        if (strstr(haystack, keywords[i]) != NULL) return 1;
+    }
+    return 0;
+}
+
+static int suspicious_maps(void) {
+    FILE *fp = fopen("/proc/self/maps", "r");
+    if (fp == NULL) return 0;
+
+    char line[512];
+    int suspicious = 0;
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (contains_keyword(line)) {
+            suspicious = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    return suspicious;
+}
+
+static int suspicious_tracer(void) {
+    FILE *fp = fopen("/proc/self/status", "r");
+    if (fp == NULL) return 0;
+
+    char line[256];
+    int suspicious = 0;
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strncmp(line, "TracerPid:", 10) == 0) {
+            char *value = line + 10;
+            while (*value == ' ' || *value == '\t') value++;
+            suspicious = (*value != '0');
+            break;
+        }
+    }
+    fclose(fp);
+    return suspicious;
+}
+
+static int suspicious_ports(void) {
+    FILE *fp = fopen("/proc/net/tcp", "r");
+    if (fp == NULL) return 0;
+
+    char line[512];
+    int suspicious = 0;
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strstr(line, ":69A2") || strstr(line, ":69A3") || strstr(line, ":5D8A") ||
+            strstr(line, ":5D8B") || strstr(line, ":5D8C") || strstr(line, ":5D8D")) {
+            suspicious = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    return suspicious;
+}
+
+static int suspicious_threads(void) {
+    DIR *dir = opendir("/proc/self/task");
+    if (dir == NULL) return 0;
+
+    struct dirent *entry;
+    int suspicious = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+
+        char path[256];
+        snprintf(path, sizeof(path), "/proc/self/task/%s/comm", entry->d_name);
+        FILE *fp = fopen(path, "r");
+        if (fp == NULL) continue;
+
+        char name[128];
+        if (fgets(name, sizeof(name), fp) != NULL && contains_keyword(name)) {
+            suspicious = 1;
+            fclose(fp);
+            break;
+        }
+        fclose(fp);
+    }
+
+    closedir(dir);
+    return suspicious;
+}
+
+static int runtime_safe_impl(void) {
+    if (getenv("LD_PRELOAD") != NULL) return 0;
+    if (getenv("FRIDA_VERSION") != NULL) return 0;
+    if (getenv("FRIDA_PORT") != NULL) return 0;
+    if (suspicious_tracer()) return 0;
+    if (suspicious_maps()) return 0;
+    if (suspicious_ports()) return 0;
+    if (suspicious_threads()) return 0;
+    return 1;
+}
+
 static int validate_key_impl(const char *key) {
     if (key == NULL) return 0;
     if ((int) strlen(key) != KEY_LENGTH) return 0;
@@ -227,6 +330,7 @@ static int validate_key_impl(const char *key) {
     }
 
     if (key[0] != '4' || key[KEY_LENGTH - 1] != '8') return 0;
+    if (!runtime_safe_impl()) return 0;
     return fnv1a64(key) == EXPECTED_FNV64 ? 1 : 0;
 }
 
@@ -269,4 +373,11 @@ Java_com_cs702_aigenerator_NativeKeyStore_verifyNative(JNIEnv *env, jclass clazz
     int valid = validate_key_impl(key_str);
     (*env)->ReleaseStringUTFChars(env, key, key_str);
     return valid;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_cs702_aigenerator_NativeKeyStore_nativeRuntimeSafe(JNIEnv *env, jclass clazz) {
+    (void) env;
+    (void) clazz;
+    return runtime_safe_impl() ? 1 : 0;
 }
