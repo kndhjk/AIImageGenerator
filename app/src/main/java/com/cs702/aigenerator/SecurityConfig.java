@@ -9,7 +9,9 @@ import java.security.cert.CertificateEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import okhttp3.CertificatePinner;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 
 /**
  * Security configuration for CS702 Fortify assignment.
@@ -60,6 +62,34 @@ public class SecurityConfig {
         } else {
             Log.w(TAG, "SSL Certificate Pinning DISABLED in debug build (emulator testing)");
         }
+
+        builder.addInterceptor(chain -> {
+            if (RuntimeGuard.shouldBlockSensitiveOps(context)) {
+                throw new java.io.IOException("security-blocked");
+            }
+
+            Request original = chain.request();
+            HttpUrl url = original.url();
+            String baseUrl = NativeKeyStore.getBaseUrl();
+            if (baseUrl == null || baseUrl.isEmpty()) {
+                throw new java.io.IOException("missing-base-url");
+            }
+
+            HttpUrl expected = HttpUrl.parse(baseUrl);
+            if (expected == null) {
+                throw new java.io.IOException("invalid-base-url");
+            }
+
+            Request.Builder req = original.newBuilder();
+            if (expected.host().equals(url.host())) {
+                String apiKey = NativeKeyStore.getApiKey(context);
+                if (!NativeKeyStore.isKeyValid(apiKey)) {
+                    throw new java.io.IOException("missing-api-key");
+                }
+                req.header(NativeKeyStore.getAuthHeaderName(), apiKey);
+            }
+            return chain.proceed(req.build());
+        });
 
         // Add logging in debug builds to diagnose network issues
         if (isDebug) {

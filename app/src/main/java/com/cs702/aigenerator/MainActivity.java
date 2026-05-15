@@ -174,13 +174,13 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        startGeneration(prompt, apiKey);
+        startGeneration(prompt);
     }
 
-    private void startGeneration(String prompt, String apiKey) {
+    private void startGeneration(String prompt) {
         Log.d(TAG, "generateImage: calling apiService.auth()");
         // Step 1: Authenticate with API key
-        apiService.auth(apiKey).enqueue(new Callback<AuthResponse>() {
+        apiService.auth().enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
                 Log.d(TAG, "auth onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
@@ -201,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
                 // Step 2: Generate image with signature from auth
                 GenerateRequest request = new GenerateRequest(signature, prompt);
                 Log.d(TAG, "generateImage: calling apiService.generateImage()");
-                apiService.generateImage(apiKey, request).enqueue(new Callback<ResponseBody>() {
+                apiService.generateImage(request).enqueue(new Callback<ResponseBody>() {
                     @Override
                     public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                         Log.d(TAG, "generate onResponse: isSuccessful=" + response.isSuccessful() + " code=" + response.code());
