@@ -319,3 +319,11 @@ The package should not include temporary key-generation tools, build caches, Git
 Client-side hardening cannot provide perfect secrecy. Since the API key must eventually be used by the app to send requests, a determined attacker with full control of the device may still attempt runtime hooking, memory inspection, or native reverse engineering.
 
 The protections in this project are designed to increase the difficulty and cost of extraction compared with storing the key directly in plaintext.
+
+---
+
+## 13. Repo and Release Links
+
+- Repository: <https://github.com/kndhjk/AIImageGenerator>
+- Releases: <https://github.com/kndhjk/AIImageGenerator/releases>
+- Current release target: `v1.1.5`
