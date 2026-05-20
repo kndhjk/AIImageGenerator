@@ -72,6 +72,8 @@ The final submitted version does **not** use any third-party proxy server, remot
 
 ## 4. Project Structure
 
+### 4.1 Source Project Structure
+
 ```text
 AIImageGenerator/
 ├── app/
@@ -80,6 +82,7 @@ AIImageGenerator/
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── cpp/
+│       │   ├── CMakeLists.txt
 │       │   └── native-key.c
 │       ├── java/com/cs702/aigenerator/
 │       │   ├── ApiClient.java
@@ -90,19 +93,37 @@ AIImageGenerator/
 │       │   ├── RootDetector.java
 │       │   ├── RuntimeGuard.java
 │       │   └── SecurityConfig.java
-│       ├── jniLibs/
-│       │   ├── arm64-v8a/libnative-key.so
-│       │   ├── armeabi-v7a/libnative-key.so
-│       │   └── x86_64/libnative-key.so
 │       └── res/
 │           ├── layout/activity_main.xml
-│           ├── values/strings.xml
-│           └── xml/network_security_config.xml
+│           ├── values/
+│           └── xml/
+│               ├── data_extraction_rules.xml
+│               └── network_security_config.xml
+├── gradle/wrapper/
 ├── build.gradle
 ├── gradle.properties
 ├── settings.gradle
-├── SECURITY_REPORT.md
-└── README.md
+├── gradlew
+├── gradlew.bat
+├── README.md
+└── SECURITY_REPORT.md
+```
+### 4.2 APK Structure
+
+```text
+AIImageGenerator-v1.1.5-release-signed.apk
+├── AndroidManifest.xml
+├── classes.dex / classes2.dex
+├── resources.arsc
+├── lib/
+│   ├── arm64-v8a/libnative-key.so
+│   ├── armeabi-v7a/libnative-key.so
+│   └── x86_64/libnative-key.so
+├── res/
+├── assets/
+├── kotlin/
+├── okhttp3/
+└── META-INF/
 ```
 
 ---
@@ -277,7 +298,7 @@ Client-side hardening cannot provide perfect secrecy. Since the API key must eve
 
 The protections in this project are designed to increase the difficulty and cost of extraction compared with storing the key directly in plaintext.
 
-## 12. Repo and release links
+## 12. Repo and Release Links
 
 - Repository: <https://github.com/kndhjk/AIImageGenerator>
 - Releases: <https://github.com/kndhjk/AIImageGenerator/releases>
