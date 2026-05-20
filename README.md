@@ -1,342 +1,304 @@
 # AI Image Generator
 
-AI Image Generator is an Android application developed for the CS702 Build & Fortify assignment. The app allows users to enter a text prompt, send the prompt to the official AI image generation server, display the generated image, and save the result to the local gallery.
+AI Image Generator is an Android text-to-image application developed for the CS702 Build & Fortify assignment. The app lets users enter a text prompt, sends the prompt to the official AI server, displays the generated image, and allows the user to save the image to the local gallery.
 
-The project also includes several client-side hardening measures designed to make API key extraction and runtime tampering more difficult.
+This repository contains the Android source code, resources, native code, build configuration, and security hardening implementation used for the submitted APK.
 
-> Important: client-side protection cannot make an API key impossible to extract. The security design in this project focuses on increasing the cost of reverse engineering, reducing accidental leakage, and defending against common static, dynamic, and network-based attacks.
+> Important: client-side protection cannot make an API key impossible to extract. The goal of this project is to increase the cost of reverse engineering and reduce common leakage paths, while still complying with the assignment rule that the app communicates directly with the official AI server only.
 
 ---
 
-## 1. Main Features
 
-### Build Requirements
+## 1. Version and Submission Information
 
-| Requirement | Implementation Status |
+- App version: `v1.1.5`
+- Package name: `com.cs702.aigenerator`
+- Submitted APK: `AIImageGenerator-v1.1.5-release-signed.apk`
+- Minimum SDK: 24
+- Target SDK: 34
+- Compile SDK: 34
+- NDK version: `26.1.10909125`
+- CMake version: `3.22.1`
+- Android Gradle Plugin: `8.13.2`
+- Gradle wrapper: `8.13`
+
+---
+
+## 2. Main Features
+
+| Requirement | Implementation |
 |---|---|
-| Text input box | Implemented. Users can enter image-generation prompts. |
-| API integration | Implemented. The app calls `/auth` first and then `/generate_image`. |
-| Image display | Implemented. The returned image URL is loaded and displayed using Glide. |
-| Save functionality | Implemented. The generated image can be saved to the Android gallery through MediaStore. |
-| User interface | Implemented. The UI includes prompt input, generate, save, cancel, loading state, and image preview. |
-| Reliability | Implemented. Loading and error handling are included. The cancel and save flows should be verified before final submission. |
-| Emulator support | The app is designed to run in a standard Android Studio emulator. This must be tested again before submission. |
+| Text input box | Users can enter image-generation prompts. |
+| API integration | The app calls `/auth` first and then `/generate_image`. |
+| Image display | The generated image is displayed in the app using Glide. |
+| Save functionality | The generated image can be saved to the Android gallery through MediaStore. |
+| User interface | The app includes prompt input, generate, save, cancel, loading state, and image preview. |
+| Reliability | The app includes loading/error handling, request cancellation, and safer image saving logic. |
+| Emulator support | The app is designed to run on a standard Android Studio emulator. |
 
 ---
 
-## 2. API Workflow
+## 3. API Workflow
 
-This application communicates directly with the AI ​​server provided in the CS702 course:
+The app communicates directly with the official AI server:
 
 ```text
 https://ai.elliottwen.info/
 ```
 
-The generation process follows two steps:
+The image generation process uses two official API calls:
 
 1. **Authentication**
    - Endpoint: `POST /auth`
-   - Header: `Authorization: <provided authorization header>`
-   - Response: a short-lived digital signature.
+      - Header: `Authorization: <provided authorization header>`
+         - Response: a short-lived digital signature.
 
-2. **Image generation**
-   - Endpoint: `POST /generate_image`
-   - Header: `Authorization: <provided authorization header>`
-   - Body:
+         2. **Image generation**
+            - Endpoint: `POST /generate_image`
+               - Header: `Authorization: <provided authorization header>`
+                  - Body:
 
-```json
-{
-  "signature": "<signature returned from /auth>",
-  "prompt": "<user prompt>"
-}
-```
+                  ```json
+                  {
+                    "signature": "<signature returned from /auth>",
+                      "prompt": "<user prompt>"
+                      }
+                      ```
 
-The server returns an image path or URL. The app then displays the image in the main screen.
+                      The server returns an image path or URL. The app then displays the image and allows the user to save it.
 
----
+                      The final submitted version does **not** use any third-party proxy server, remote key delivery server, or extra network service.
 
-## 3. Project Structure
+                      ---
 
-```text
-AIImageGenerator/
-├── app/
-│   ├── build.gradle
-│   ├── proguard-rules.pro
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       ├── cpp/
-│       │   └── native-key.c
-│       ├── java/com/cs702/aigenerator/
-│       │   ├── ApiClient.java
-│       │   ├── ApiModels.java
-│       │   ├── ApiService.java
-│       │   ├── MainActivity.java
-│       │   ├── NativeKeyStore.java
-│       │   ├── RootDetector.java
-│       │   ├── RuntimeGuard.java
-│       │   └── SecurityConfig.java
-│       ├── jniLibs/
-│       │   ├── arm64-v8a/libnative-key.so
-│       │   ├── armeabi-v7a/libnative-key.so
-│       │   └── x86_64/libnative-key.so
-│       └── res/
-│           ├── layout/activity_main.xml
-│           ├── values/strings.xml
-│           └── xml/network_security_config.xml
-├── build.gradle
-├── gradle.properties
-├── settings.gradle
-├── SECURITY_REPORT.md
-└── README.md
-```
+                      ## 4. Project Structure
+                      
+                      ```text
+                      AIImageGenerator/
+                      ├── app/
+                      │   ├── build.gradle
+                      │   ├── proguard-rules.pro
+                      │   └── src/main/
+                      │       ├── AndroidManifest.xml
+                      │       ├── cpp/
+                      │       │   └── native-key.c
+                      │       ├── java/com/cs702/aigenerator/
+                      │       │   ├── ApiClient.java
+                      │       │   ├── ApiModels.java
+                      │       │   ├── ApiService.java
+                      │       │   ├── MainActivity.java
+                      │       │   ├── NativeKeyStore.java
+                      │       │   ├── RootDetector.java
+                      │       │   ├── RuntimeGuard.java
+                      │       │   └── SecurityConfig.java
+                      │       ├── jniLibs/
+                      │       │   ├── arm64-v8a/libnative-key.so
+                      │       │   ├── armeabi-v7a/libnative-key.so
+                      │       │   └── x86_64/libnative-key.so
+                      │       └── res/
+                      │           ├── layout/activity_main.xml
+                      │           ├── values/strings.xml
+                      │           └── xml/network_security_config.xml
+                      ├── build.gradle
+                      ├── gradle.properties
+                      ├── settings.gradle
+                      ├── SECURITY_REPORT.md
+                      └── README.md
+                      ```
 
----
+                      ---
 
-## 4. Main Code Components
+                      ## 5. Main Code Components
 
-### `MainActivity.java`
+                      ### `MainActivity.java`
 
-Responsible for the main app workflow:
+                      Handles the main user workflow:
 
-- Reads the user prompt.
-- Starts the authentication request.
-- Sends the image-generation request.
-- Displays the returned image.
-- Saves the generated image to the local gallery.
-- Shows loading and error states.
-- Connects UI buttons to their actions.
+                      - Reads the user prompt.
+                      - Starts the authentication and image generation requests.
+                      - Displays loading and error states.
+                      - Displays the generated image.
+                      - Saves the generated image to the local gallery.
+                      - Supports request cancellation.
 
-### `ApiService.java`
+                      ### `ApiService.java`
 
-Defines the Retrofit API interfaces for:
+                      Defines the Retrofit API methods for:
 
-- `POST /auth`
-- `POST /generate_image`
+                      - `POST /auth`
+                      - `POST /generate_image`
 
-### `ApiModels.java`
+                      ### `ApiModels.java`
 
-Defines request and response models used by Retrofit and Gson.
+                      Defines the request and response models used by Retrofit and Gson, including the authentication response and image-generation request body.
 
-### `SecurityConfig.java`
+                      ### `SecurityConfig.java`
 
-Builds the hardened OkHttp client and configures SSL certificate pinning in release builds.
+                      Builds the hardened OkHttp clients, restricts the allowed API surface, injects the Authorization header, and enables certificate pinning in release builds.
 
-### `NativeKeyStore.java` and `native-key.c`
+                      ### `NativeKeyStore.java` and `native-key.c`
 
-Implement layered API key reconstruction and validation logic. The authorization key is not stored as a single plaintext string in the Java source code. Instead, it is split into fragments and reconstructed at runtime, with native-layer participation.
+                      Provide native-backed API key reconstruction and validation. The API key is not stored as one plaintext Java string.
 
-### `RootDetector.java`
+                      ### `RuntimeGuard.java` and `RootDetector.java`
 
-Checks for common root, Magisk, Xposed, Substrate, and other modified-environment indicators.
+                      Perform runtime checks for suspicious environments, including debugging, root indicators, Frida-like traces, and tampering indicators.
 
-### `RuntimeGuard.java`
+                      ---
 
-Checks for suspicious runtime conditions such as debugging, Frida-related traces, suspicious ports, and instrumentation indicators.
+                      ## 6. Build Document
 
----
+                      ### 6.1 Build Environment
 
-## 5. Fortify Implementation
+                      The project is intended to be built with Android Studio or the included Gradle wrapper.
 
-The app uses a defense-in-depth approach. The main purpose is to protect the API authorization key from simple extraction and reduce the success of common attacks.
+                      Recommended environment:
 
-### 5.1 API Key Configuration
+                      - Android Studio with JDK 17
+                      - Android SDK Platform 34
+                      - NDK side-by-side `26.1.10909125`
+                      - CMake `3.22.1`
+                      - Windows, macOS, or Linux with Gradle wrapper support
 
-For security reasons, the API authorization key is not stored as a single plaintext string in the Android source code.
+                      ### 6.2 Build Commands
 
-Before release, the real API key is processed by a temporary local encoding tool and then stored in `NativeKeyStore.java` as several encoded fragments. At runtime, the app reconstructs the authorization key internally before sending requests to the AI server.
+                      Windows:
 
-The temporary encoding tool is not included in the submitted project, and the real API key is not written in the README, logs, screenshots, or documentation.
+                      ```bat
+                      gradlew.bat clean assembleRelease
+                      ```
 
-### 5.2 API Key Obfuscation
+                      macOS/Linux:
 
-Implemented in:
+                      ```bash
+                      ./gradlew clean assembleRelease
+                      ```
 
-```text
-NativeKeyStore.java
-native-key.c
-```
+                      ### 6.3 APK Output
 
-Protection measures include:
+                      The release APK is generated under:
 
-- Splitting the key material into several fragments.
-- Reordering and reconstructing the fragments at runtime.
-- Applying a reverse transformation before native validation.
-- Using a native library to participate in key validation.
-- Including decoy strings to make static analysis less straightforward.
+                      ```text
+                      app/build/outputs/apk/release/
+                      ```
 
-### 5.3 Native Layer Protection
+                      The submitted APK is:
 
-The project includes compiled native libraries:
+                      ```text
+                      AIImageGenerator-v1.1.5-release-signed.apk
+                      ```
 
-```text
-app/src/main/jniLibs/arm64-v8a/libnative-key.so
-app/src/main/jniLibs/armeabi-v7a/libnative-key.so
-app/src/main/jniLibs/x86_64/libnative-key.so
-```
+                      ### 6.4 Release Configuration
 
-Moving part of the key-handling logic into native code increases the effort required for reverse engineering compared with storing all logic only in Java bytecode.
+                      The release build enables R8/ProGuard and resource shrinking:
 
-### 5.4 SSL Certificate Pinning
+                      ```gradle
+                      release {
+                          minifyEnabled true
+                              shrinkResources true
+                                  proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                                  }
+                                  ```
 
-Implemented in:
+                     ---
 
-```text
-SecurityConfig.java
-```
+                     ## 7. Open-Source Obfuscator Declaration
 
-The release build uses OkHttp `CertificatePinner` to pin the server certificate/public key and reduce the risk of man-in-the-middle attacks.
+                     This project uses Android's built-in R8/ProGuard for release build shrinking, optimization, obfuscation, and resource shrinking.
 
-Current pin value used in the code:
+                     | Tool | Purpose | License / Status |
+                     |---|---|---|
+                     | R8 / ProGuard | Code shrinking, optimization, obfuscation, and resource shrinking | Included in the Android Gradle Plugin / Android build toolchain |
 
-```text
-sha256/JchgWAvcRYiIxf8gVP+SWeD5PCqwJVYGxQd2YqbSrz4=
-```
+                     No commercial obfuscator was used.
 
-Debug builds relax pinning to support emulator testing and development.
+                     ---
 
-### 5.5 Runtime Protection
+                     ## 8. Fortify Summary
 
-Implemented in:
+                     The app uses a layered hardening strategy. The main goal is to make API key extraction and runtime tampering more difficult.
 
-```text
-RuntimeGuard.java
-RootDetector.java
-MainActivity.java
-```
+                     The API authorization key is not written in the README, logs, screenshots, or documentation, and it is not stored as a single plaintext Java string in the source code. Key handling is intentionally kept out of high-level UI code as much as possible, and native-backed reconstruction is used to make simple Java-level static analysis less effective.
 
-The app checks for:
+                     Implemented measures include:
 
-- Debugger attachment.
-- Suspicious `TracerPid` values.
-- Frida-related ports and memory-map traces.
-- Suspicious packages.
-- Root and Magisk-related indicators.
-- Xposed/Substrate-related indicators.
+                     - Native-backed API key reconstruction.
+                     - API key is not stored as one plaintext Java string.
+                     - R8/ProGuard release obfuscation and resource shrinking.
+                     - HTTPS-only communication with the official AI server.
+                     - Certificate pinning for release networking.
+                     - Network surface restriction to the official host and expected API paths.
+                     - No third-party proxy server or remote key server.
+                     - Cleartext traffic disabled.
+                     - App backup disabled.
+                     - Data extraction rules are configured to reduce backup-based data exposure.
+                     - Runtime checks for debugging, root indicators, Frida-like traces, and tampering indicators.
+                     - Sensitive logs removed from release builds.
+                     - Save button is enabled only after the image bitmap is ready.
+                     - Cancel button cancels the active request and prevents late callbacks from updating the UI.
 
-In release builds, suspicious runtime conditions can block sensitive operations.
+                     More details are provided in `SECURITY_REPORT.md`.
 
-### 5.6 R8 / ProGuard Hardening
+                     ---
 
-Release builds enable shrinking and obfuscation:
+                     ## 9. Testing Checklist
 
-```gradle
-release {
-    minifyEnabled true
-    shrinkResources true
-    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-}
-```
+                     Before submission, the app should be tested on a standard Android Studio emulator:
 
-The project uses Android's built-in R8/ProGuard configuration. No commercial obfuscator is used.
+                     - App launches successfully.
+                     - User can enter a prompt.
+                     - App can call `/auth`.
+                     - App can call `/generate_image`.
+                     - Generated image is displayed.
+                     - Save button saves the generated image to the gallery.
+                     - Cancel button stops waiting for the current request.
+                     - App does not freeze or crash during normal use.
+                     - Release APK does not contain the public test key.
+                     - Release APK does not contact third-party servers.
 
-R8 helps with:
+                     ---
 
-- Removing unused code.
-- Obfuscating class, method, and field names.
-- Reducing APK size.
-- Removing selected logging calls in release builds according to `proguard-rules.pro`.
+                     ## 10. Submission Checklist
 
-R8 does not provide absolute string encryption, so the app also uses custom key splitting and native-layer validation.
+                     The final ZIP submission should contain:
 
-### 5.7 Network Security Configuration
+                     - `AIImageGenerator-v1.1.5-release-signed.apk`
+                     - Complete Android project source code
+                     - Required resources and native files
+                     - `README.md`
+                     - `SECURITY_REPORT.md`
 
-Implemented in:
+                     The final ZIP should not contain:
 
-```text
-AndroidManifest.xml
-res/xml/network_security_config.xml
-```
+                     - `.git/`
+                     - `.gradle/`
+                     - `build/` or `app/build/`
+                     - temporary key-generation tools
+                     - the public test key
+                     - the real API key in plaintext
+                     - third-party remote key server code
 
-The app disables cleartext HTTP traffic:
+                     ---
 
-```xml
-android:usesCleartextTraffic="false"
-```
+                  ## 11. Academic Integrity and Network Compliance
 
-The network security configuration also sets `cleartextTrafficPermitted="false"`.
+                  The submitted version follows the assignment requirements:
 
-### 5.8 Backup and Data Extraction Restrictions
+                  - The app communicates directly with `https://ai.elliottwen.info/`.
+                  - No third-party proxy server is used.
+                  - No remote key delivery server is used.
+                  - No DDoS or abusive server testing is performed.
+                  - The API key is not shared with other groups.
+                  - The public test key is not used in the submitted version.
+                  - No commercial obfuscator is used.
 
-Implemented in:
+                  ---
 
-```text
-AndroidManifest.xml
-res/xml/data_extraction_rules.xml
-```
+                  ## 12. Important Limitations
 
-The manifest disables app backup:
+                  Client-side hardening cannot provide perfect secrecy. Since the API key must eventually be used by the app to send requests, a determined attacker with full control of the device may still attempt runtime hooking, memory inspection, or native reverse engineering.
 
-```xml
-android:allowBackup="false"
-android:fullBackupContent="false"
-```
+                  Runtime detection can also be bypassed by advanced attackers, so it should be treated as one layer of defence rather than a complete solution. Certificate pinning may need to be updated if the official server certificate or pinned public key changes. Debug builds are less strict than release builds to support development and emulator testing.
 
-This reduces the risk of sensitive app data being extracted through Android backup mechanisms.
+                  The protections in this project are designed to increase the difficulty and cost of extraction compared with storing the key directly in plaintext.
 
----
-
-## 6. Build Instructions
-
-### Requirements
-
-- Android Studio
-- Android Gradle Plugin compatible with the project configuration
-- Android SDK 34
-- Minimum SDK: 24
-- Java 8 compatibility
-
-### Debug Build
-
-```bash
-./gradlew assembleDebug
-```
-
-### Release Build
-
-```bash
-./gradlew assembleRelease
-```
-
-The generated APK can usually be found under:
-
-```text
-app/build/outputs/apk/release/
-```
-
----
-
-## 7. Open-Source Obfuscator Declaration
-
-This project uses the following free and open-source Android tooling:
-
-| Tool | Purpose | License/Status |
-|---|---|---|
-| R8 / ProGuard | Code shrinking, optimization, and obfuscation | Built into Android Gradle Plugin / open-source Android toolchain |
-
-No commercial obfuscator is used.
-
----
-
-## 8. Known Limitations
-
-- Client-side API key protection cannot provide perfect secrecy against a determined attacker.
-- Runtime detection can be bypassed by advanced attackers.
-- Certificate pinning can break if the server certificate or public key changes, so the pin should be checked before final release.
-- Debug builds are less strict than release builds to support development and emulator testing.
-- The cancel and save flows should be tested again after final code changes.
-
----
-
-## 9. Academic Integrity Notes
-
-- The app communicates directly with the official AI server.
-- No third-party proxy server is used.
-- No DDoS or abusive server testing is performed.
-- The API key must not be shared with other groups.
-- The public test key must not be used in the submitted version.
-
----
-
-## 10. 可以加强地方
-
-删除敏感 log、让所有网络请求都走 pinned OkHttpClient、加入 release 签名校验、加入 key hash integrity check、加强 ProGuard 不要 keep 整个安全类
