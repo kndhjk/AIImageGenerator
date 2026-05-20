@@ -301,4 +301,3 @@ The image generation process uses two official API calls:
                   Runtime detection can also be bypassed by advanced attackers, so it should be treated as one layer of defence rather than a complete solution. Certificate pinning may need to be updated if the official server certificate or pinned public key changes. Debug builds are less strict than release builds to support development and emulator testing.
 
                   The protections in this project are designed to increase the difficulty and cost of extraction compared with storing the key directly in plaintext.
-
