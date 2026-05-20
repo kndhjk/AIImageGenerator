@@ -2,9 +2,9 @@
 
 ## 1. Security Goals
 
-The purpose of our fortification work was to make the Android app harder to analyse, modify, or misuse, with a particular focus on protecting the provided API authorization key.
+The main purpose of our fortification work was to make the Android app harder to analyse, modify, or misuse. The most important asset we needed to protect was the provided API authorization key.
 
-Because this is a client-side Android app, the API key eventually has to be used by the app when it sends requests to the official AI image generation server. This means the key cannot be protected perfectly. Our goal was therefore to remove easy leakage points, increase the effort required for reverse engineering, and make common attacks less straightforward.
+Because this is a client-side Android app, the key eventually has to be used when the app sends requests to the official AI image generation server. This means the key cannot be protected perfectly. Our aim was to remove easy leakage points, make reverse engineering more difficult, and reduce the chance of accidental exposure.
 
 Our main security goals were to:
 
@@ -24,7 +24,7 @@ Our main security goals were to:
 
 The API key is not stored as one obvious plaintext string in the Java source code.
 
-Instead, key handling is supported by the native layer. This means that a simple Java decompilation using tools such as JADX should not directly reveal the full key as a clear string constant.
+Instead, key handling is supported by the native layer. This means that simple Java decompilation with tools such as JADX should not directly reveal the full key as a clear string constant.
 
 Relevant components:
 
@@ -67,7 +67,7 @@ The native library is packaged for multiple supported architectures so the app c
 
 ### 2.3 R8 / ProGuard Obfuscation
 
-The submitted release APK enables R8 / ProGuard obfuscation. This reduces the readability of compiled Java/Kotlin bytecode and makes Java-level reverse engineering less straightforward.
+The submitted release APK enables R8 / ProGuard obfuscation. This reduces the readability of compiled bytecode and makes Java-level reverse engineering less straightforward.
 
 The release APK contains compiled DEX files rather than readable source code:
 
@@ -117,7 +117,7 @@ Relevant file:
 SecurityConfig.java
 ```
 
-Certificate pinning helps the app verify that it is communicating with the expected server identity. This adds protection beyond standard HTTPS certificate validation.
+Certificate pinning helps the app verify that it is communicating with the expected server identity. This adds protection beyond normal HTTPS certificate validation.
 
 ---
 
@@ -306,21 +306,21 @@ The final submission package is intended to contain the release APK, source code
 
 ## 4. Rationale
 
-We used a layered approach because protecting an API key inside a mobile app is difficult. The app has to use the key when it talks to the AI server, so there is no single technique that can make the key completely safe. Instead of relying on one defence, we tried to remove the easiest ways the key could leak and make reverse engineering take more time and effort.
+We used a layered design because there is no single perfect way to protect an API key inside a mobile app. The key has to be used by the app at runtime, so a determined attacker may still try to inspect memory, hook functions, or reverse engineer the native library. Because of this, our aim was to remove the easiest attack paths and make each remaining path take more work.
 
-One of the first choices was to avoid placing the key directly in Java code. Java bytecode can be decompiled quite easily with tools such as JADX, so a plain string would be too easy to find. Moving part of the key handling into native code gives us an extra barrier. It does not make the key impossible to recover, but it means an attacker has to look beyond the Java layer.
+The first decision was to avoid putting the API key directly in Java code. Java bytecode can be decompiled quite easily, so a hardcoded key would be one of the first things an attacker would search for. Moving part of the key handling into native code gives the app an extra layer of protection. It does not make the key impossible to recover, but it means that a simple Java-only inspection is not enough.
 
-We enabled R8 / ProGuard for the release APK for a similar reason. Readable class and method names can show attackers where important logic is located. Obfuscation makes the decompiled code less clear and removes some unnecessary structure. It is not enough by itself, but it works well as one layer in a wider defence.
+We enabled R8 / ProGuard for the release APK for the same reason. Clear class and method names can guide an attacker to important parts of the app. Obfuscation makes the decompiled code harder to read and removes some unnecessary structure. It is not a complete security solution, but it is useful when combined with native key handling and runtime checks.
 
-We also focused on network security because the app must send authenticated requests to the official server. HTTPS protects the connection, while certificate pinning helps reduce the risk of traffic being intercepted with a fake or locally installed certificate. Since the Authorization header is sensitive, protecting the communication path is important.
+Network security was also important. The app sends authenticated requests to the official AI server, so we need to protect the connection as much as possible. HTTPS protects the communication channel, and certificate pinning reduces the risk of trusting a forged or unexpected certificate. This helps protect the Authorization header and the request flow from simple interception attempts.
 
-We chose not to use a remote key server. Although remote key delivery might seem useful, it would introduce another network endpoint. The assignment clearly states that the app must communicate directly with the official AI server only, so using a third-party key server would create a compliance risk. For this reason, the final app keeps its network communication limited to the official server.
+We deliberately did not use a remote key server. It might seem attractive from a security point of view, but it would introduce another network endpoint. The assignment clearly says that the app must communicate directly with the official AI server only, so a remote key server would create a compliance problem. Keeping the final design limited to the official server was safer and more appropriate for this project.
 
-Runtime checks were added because attackers may not only inspect the APK statically; they may also try to observe the app while it is running. Checks for debugging, root, Frida-like traces, and other suspicious conditions make this type of analysis less convenient. These checks are not perfect, but they help increase the effort required for common attacks.
+Runtime checks were added because reverse engineering is not only static. Someone may also try to observe the app while it is running. Checks for debugging, root indicators, Frida-like traces, and other suspicious behaviour make this type of analysis less convenient. These checks can be bypassed by advanced attackers, but they still raise the effort required for common attacks.
 
-Finally, we reduced logging because logs are an easy place for sensitive data to leak by accident. Even if the key is hidden in code, careless logging could expose signatures, response data, or request details. Removing sensitive logs is a simple but important part of the overall security design.
+We also reduced logging because logs are a common source of accidental data leakage. Even if the key is not visible in the source code, careless logging could expose signatures, response data, request details, or other useful information. Avoiding sensitive logs is a simple but important part of the security design.
 
-Overall, our design tries to balance security, assignment compliance, and reliability. We avoided overly complex solutions that could break the app or violate the network rules. Instead, we combined several practical measures that together make key extraction and misuse harder.
+Overall, we tried to balance security, reliability, and assignment compliance. We avoided solutions that might break the app or violate the network rules. Instead, we combined several practical protections that work together to make key extraction and misuse harder.
 
 ---
 
@@ -346,7 +346,7 @@ We removed remote key delivery from the final version. The app communicates dire
 
 ### Challenge 3: Balancing Security and Reliability
 
-Some security measures can make an app harder to maintain or may introduce build/runtime problems if they are applied too aggressively.
+Some security measures can make an app harder to maintain or may introduce build or runtime problems if they are applied too aggressively.
 
 **Solution:**  
 We tested the release APK on a standard Android Studio emulator and focused on protections that support both security and reliability.
@@ -367,7 +367,7 @@ We reviewed logging and avoided intentionally printing API keys, Authorization h
 The documentation needs to describe how the app was fortified, but it should not expose secret material or make reverse engineering easier.
 
 **Solution:**  
-This report describes the security approach at a high level. It avoids including the real API key, public test key, key fragments, or step-by-step extraction instructions.
+This report explains the security approach at a high level. It does not include the real API key, public test key, key fragments, or step-by-step extraction instructions.
 
 ---
 
