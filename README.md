@@ -1,23 +1,25 @@
 # AI Image Generator
 
-AI Image Generator is an Android text-to-image application developed for the CS702 Build & Fortify assignment. The app lets users enter a text prompt, sends the prompt to the official AI server, displays the generated image, and allows users to save the image to the local gallery.
+AI Image Generator is an Android text-to-image application developed for the CS702 Build & Fortify assignment. The app allows users to enter a text prompt, send the prompt to the official AI server, display the generated image, and save the image to the local gallery.
 
 This repository contains the Android source code, resources, native code, build configuration, and security hardening implementation used for the submitted APK.
 
-> **Important:** Client-side protection cannot make an API key impossible to extract. The goal of this project is to increase the cost of reverse engineering and reduce common leakage paths, while complying with the assignment rule that the app communicates directly with the official AI server only.
+> **Important:** Client-side protection cannot make an API key impossible to extract. The aim of this project is to make extraction more difficult, reduce common leakage paths, and comply with the assignment rule that the app communicates directly with the official AI server only.
 
 ---
 
 ## 1. Version and Submission Information
 
-- App version: `v1.1.5`
+- App version: `v1.1.6`
 - Package name: `com.cs702.aigenerator`
-- Submitted APK: `AIImageGenerator-v1.1.5-release-signed.apk`
+- Submitted APK: `AIImageGenerator-v1.1.6-release-signed.apk`
 - Minimum SDK: 24
 - Target SDK: 34
 - Compile SDK: 34
 - NDK version: `26.1.10909125`
 - CMake version: `3.22.1`
+- Android Gradle Plugin: `8.13.2`
+- Gradle wrapper: `8.13`
 - Build type: Release
 
 ---
@@ -31,7 +33,7 @@ This repository contains the Android source code, resources, native code, build 
 | Image display | The generated image is displayed in the app using Glide. |
 | Save functionality | The generated image can be saved to the Android gallery through MediaStore. |
 | User interface | The app includes prompt input, generate, save, cancel, loading state, and image preview. |
-| Reliability | The app includes loading/error handling and request cancellation. The save function checks whether a bitmap is available before writing to the gallery. |
+| Reliability | The app includes loading and error handling, request cancellation, and safer image-saving logic. |
 | Emulator support | The app is designed to run on a standard Android Studio emulator. |
 
 ---
@@ -63,9 +65,9 @@ The image-generation process uses two official API calls:
 }
 ```
 
-The server returns an image path or URL. The app then displays the image and allows the user to save it.
+The server returns an image path or URL. The app then displays the generated image and allows the user to save it.
 
-The submitted version does **not** use any third-party proxy server, remote key delivery server, or extra network service.
+The final submitted version does **not** use any third-party proxy server, remote key delivery server, or extra network service.
 
 ---
 
@@ -95,6 +97,9 @@ AIImageGenerator/
 │       └── res/
 │           ├── layout/activity_main.xml
 │           ├── values/
+│           │   ├── colors.xml
+│           │   ├── strings.xml
+│           │   └── themes.xml
 │           └── xml/
 │               ├── data_extraction_rules.xml
 │               └── network_security_config.xml
@@ -110,8 +115,10 @@ AIImageGenerator/
 
 ### 4.2 APK Structure
 
+The release APK contains compiled bytecode, Android resources, native libraries, and signing metadata. The native security component is packaged as `libnative-key.so` for the supported emulator/device architectures.
+
 ```text
-AIImageGenerator-v1.1.5-release-signed.apk
+AIImageGenerator-v1.1.6-release-signed.apk
 ├── AndroidManifest.xml
 ├── classes.dex / classes2.dex
 ├── resources.arsc
@@ -141,6 +148,10 @@ Handles the main user workflow:
 - Saves the generated image to the local gallery.
 - Supports request cancellation.
 
+### `ApiClient.java`
+
+Builds and provides the Retrofit client used for server communication.
+
 ### `ApiService.java`
 
 Defines the Retrofit API methods for:
@@ -154,7 +165,7 @@ Defines the data models used by Retrofit and Gson. `AuthResponse` represents the
 
 ### `SecurityConfig.java`
 
-Builds the hardened OkHttp client, restricts the allowed API surface, injects the Authorization header, disables redirects, and enables certificate pinning in release builds.
+Builds the hardened OkHttp clients, restricts the allowed API surface, injects the Authorization header, and enables certificate pinning in release builds.
 
 ### `NativeKeyStore.java` and `native-key.c`
 
@@ -205,57 +216,56 @@ app/build/outputs/apk/release/
 The submitted APK is:
 
 ```text
-AIImageGenerator-v1.1.5-release-signed.apk
+AIImageGenerator-v1.1.6-release-signed.apk
 ```
 
 ### 6.4 Release Configuration
 
-The submitted release build prioritises runtime stability. The project includes a `proguard-rules.pro` file, but release minification and resource shrinking are disabled in this version because earlier testing showed regressions when aggressive shrinking was enabled.
+The release build enables R8/ProGuard and resource shrinking:
 
 ```gradle
 release {
-    minifyEnabled false
-    shrinkResources false
+    minifyEnabled true
+    shrinkResources true
     proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 }
 ```
-
-The app instead relies on native-layer key reconstruction, certificate pinning, network restrictions, runtime checks, backup restrictions, and careful key handling for fortification.
 
 ---
 
 ## 7. Open-Source Obfuscator Declaration
 
-No commercial obfuscator was used.
+This project uses Android's built-in R8/ProGuard for release build shrinking, optimization, obfuscation, and resource shrinking.
 
-This project includes Android's standard R8/ProGuard configuration file (`proguard-rules.pro`). However, for the submitted release build, minification and resource shrinking are disabled to preserve app stability after compatibility issues were observed during testing.
-
-| Tool / Configuration | Purpose | Status |
+| Tool | Purpose | License / Status |
 |---|---|---|
-| R8 / ProGuard configuration | Android code shrinking and obfuscation support | Included but not enabled for submitted release minification |
-| Commercial obfuscator | Not used | Not used |
+| R8 / ProGuard | Code shrinking, optimization, obfuscation, and resource shrinking | Included in the Android Gradle Plugin / Android build toolchain |
+
+No commercial obfuscator was used.
 
 ---
 
 ## 8. Fortify Summary
 
-The app uses a layered hardening strategy. The main goal is to make API key extraction and runtime tampering more difficult while keeping the app stable on a standard Android Studio emulator.
+The app uses a layered hardening strategy. The main goal is to make API key extraction and runtime tampering more difficult.
+
+The API authorization key is not written in the README, logs, screenshots, or documentation, and it is not stored as a single plaintext Java string in the source code. Native-backed reconstruction is used to make simple Java-level static analysis less effective.
 
 Implemented measures include:
 
 - Native-backed API key reconstruction.
 - API key is not stored as one plaintext Java string.
-- Authorization header is added through the OkHttp request flow rather than being written directly into the UI code.
+- R8/ProGuard release obfuscation and resource shrinking.
 - HTTPS-only communication with the official AI server.
 - Certificate pinning for release networking.
 - Network surface restriction to the official host and expected API paths.
-- Redirects disabled in the secure OkHttp client.
 - No third-party proxy server or remote key server.
 - Cleartext traffic disabled.
 - App backup disabled.
 - Data extraction rules configured to reduce backup-based data exposure.
 - Runtime checks for debugging, root indicators, Frida-like traces, and tampering indicators.
-- API key and Authorization header are not intentionally logged.
+- Sensitive logs removed or reduced in release builds.
+- Save and Cancel reliability improvements.
 
 More details are provided in `SECURITY_REPORT.md`.
 
@@ -263,44 +273,49 @@ More details are provided in `SECURITY_REPORT.md`.
 
 ## 9. Testing Checklist
 
-Before submission, the following checks should be performed:
+Before submission, the app should be tested on a standard Android Studio emulator:
 
-- App installs and launches on a standard Android Studio emulator.
-- A prompt can be entered in the text box.
-- `/auth` request succeeds with the provided authorization key.
-- `/generate_image` request succeeds with the short-lived signature.
-- Generated image is displayed in the app.
-- Save button stores the generated image in the Android gallery when the bitmap is available.
-- Cancel button cancels the current request and hides the loading state.
+- App launches successfully.
+- User can enter a prompt.
+- App can call `/auth`.
+- App can call `/generate_image`.
+- Generated image is displayed.
+- Save button saves the generated image to the gallery.
+- Cancel button stops waiting for the current request.
+- App does not freeze or crash during normal use.
 - Release APK does not contain the public test key.
-- Release APK does not contain a remote key server endpoint.
-- App communicates directly with `https://ai.elliottwen.info/` only.
+- Release APK does not contact third-party servers.
 
 ---
 
-## 10. Academic Integrity and Network Compliance
+## 10. Submission Package Contents
 
-This project follows the assignment rules:
+The submitted ZIP package should contain:
 
-- The app communicates directly with the official AI server.
+- `AIImageGenerator-v1.1.6-release-signed.apk`
+- Complete Android source code
+- All required resources and native files
+- `README.md`
+- `SECURITY_REPORT.md`
+
+The package should not include temporary key-generation tools, build caches, Git metadata, or the public test key.
+
+---
+
+## 11. Academic Integrity and Network Compliance
+
+- The app communicates directly with the official AI server only.
 - No third-party proxy server is used.
 - No remote key delivery server is used.
 - No DDoS or abusive server testing is performed.
-- The public test key is not used in the submitted version.
 - The API key is not shared with other groups.
+- The public test key is not used in the submitted version.
 - No commercial obfuscator is used.
 
 ---
 
-## 11. Important Limitations
+## 12. Important Limitations
 
-Client-side API key protection cannot provide perfect secrecy. A determined attacker with full control of the device may still attempt runtime hooking, memory inspection, APK patching, or native reverse engineering.
+Client-side hardening cannot provide perfect secrecy. Since the API key must eventually be used by the app to send requests, a determined attacker with full control of the device may still attempt runtime hooking, memory inspection, or native reverse engineering.
 
-The security measures in this project are designed to increase attack cost and reduce common leakage paths, not to make extraction impossible.
-
-
-## 12. Repo and Release Links
-
-- Repository: <https://github.com/kndhjk/AIImageGenerator>
-- Releases: <https://github.com/kndhjk/AIImageGenerator/releases>
-- Current release target: `v1.1.5`
+The protections in this project are designed to increase the difficulty and cost of extraction compared with storing the key directly in plaintext.
