@@ -39,13 +39,13 @@ android {
         release {
             // This project previously regressed under R8/resource shrinking.
             // Keep release stable and rely on native + runtime hardening instead.
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
         }
     }
 
